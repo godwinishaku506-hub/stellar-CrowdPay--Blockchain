@@ -265,6 +265,7 @@ async function buildUnsignedContributionPayment({
     );
   }
 
+  const tx = builder.setTimeout(TX_TIMEOUT_CONTRIBUTION_S).build();
   return tx.toXDR();
 }
 
@@ -279,6 +280,7 @@ async function prepareSignedContributionPayment({
   memo,
 }) {
   const senderKeypair = Keypair.fromSecret(senderSecret);
+  const { feeAmount } = calcFee(amount);
   const unsignedXdr = await buildUnsignedContributionPayment({
     senderPublicKey: senderKeypair.publicKey(),
     destinationPublicKey,
@@ -351,6 +353,7 @@ async function buildUnsignedContributionPathPayment({
     );
   }
 
+  const tx = builder.setTimeout(TX_TIMEOUT_CONTRIBUTION_S).build();
   return tx.toXDR();
 }
 
@@ -367,6 +370,7 @@ async function prepareSignedContributionPathPayment({
   memo,
 }) {
   const senderKeypair = Keypair.fromSecret(senderSecret);
+  const { feeAmount } = calcFee(destAmount);
   const unsignedXdr = await buildUnsignedContributionPathPayment({
     senderPublicKey: senderKeypair.publicKey(),
     destinationPublicKey,
@@ -543,6 +547,14 @@ async function getCampaignBalance(publicKey) {
 
 /**
  * Fund a new account on testnet using Friendbot.
+ */
+async function friendbotFund(publicKey) {
+  if (!isTestnet) throw new Error('Friendbot only available on testnet');
+  const response = await fetch(
+    `https://friendbot.stellar.org?addr=${encodeURIComponent(publicKey)}`
+  );
+  return response.json();
+}
 
 /**
  * Recover campaign wallet from encrypted secret.
@@ -597,12 +609,24 @@ async function getWalletPayments(publicKey, limit = 100) {
   }));
 }
 
-async function friendbotFund(publicKey) {
-  if (!isTestnet) throw new Error('Friendbot only available on testnet');
-  const response = await fetch(
-    `https://friendbot.stellar.org?addr=${encodeURIComponent(publicKey)}`
-  );
-  return response.json();
+/**
+ * Returns true if the error is a Stellar bad sequence number error (result code tx_bad_seq).
+ * Used to detect sequence number conflicts so callers can retry with a fresh account load.
+ */
+function isBadSequenceError(err) {
+  try {
+    const extras = err?.response?.data?.extras;
+    const resultCodes = extras?.result_codes;
+    if (resultCodes?.transaction === 'tx_bad_seq') return true;
+    // Also check envelope-level result code string
+    const resultXdr = extras?.envelope_xdr || '';
+    if (!resultXdr && typeof err?.message === 'string') {
+      return err.message.includes('tx_bad_seq');
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 module.exports = {
@@ -633,5 +657,7 @@ module.exports = {
 
   getCampaignBalance,
   friendbotFund,
+  buildBatchRefundTransaction,
+  isBadSequenceError,
   PLATFORM_PUBLIC_KEY: PLATFORM_KEYPAIR.publicKey(),
 };

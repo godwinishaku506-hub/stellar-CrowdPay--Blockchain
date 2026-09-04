@@ -14,8 +14,14 @@ const { TX_TIMEOUT_CONTRIBUTION_S } = require('../config/constants');
 
 async function simulateAndPrepare(tx) {
   const simulation = await server.simulateTransaction(tx);
-  if (xdr.TransactionMeta.fromXDR(simulation.result.meta, 'base64').v3().sorobanMeta().returnValue().type() === xdr.ScValType.scvError) {
+  if (
+    simulation?.result?.meta &&
+    xdr.TransactionMeta.fromXDR(simulation.result.meta, 'base64').v3().sorobanMeta().returnValue().type() === xdr.ScValType.scvError
+  ) {
     throw new Error(`Simulation failed: ${JSON.stringify(simulation.result)}`);
+  }
+  if (simulation?.error) {
+    throw new Error(`Simulation failed: ${simulation.error}`);
   }
   return server.prepareTransaction(tx);
 }

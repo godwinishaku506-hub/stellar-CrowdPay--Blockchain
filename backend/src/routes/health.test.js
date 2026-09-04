@@ -5,6 +5,10 @@ const request = require('supertest');
 
 const mockSentry = {
   init: () => {},
+  expressIntegration: () => ({}),
+  sentryRequestMiddleware: () => (req, res, next) => next(),
+  expressErrorHandler: () => (err, req, res, next) => next(err),
+  setUser: () => {},
   Handlers: {
     requestHandler: () => (req, res, next) => next(),
     tracingHandler: () => (req, res, next) => next(),
