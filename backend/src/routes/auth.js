@@ -119,16 +119,17 @@ function clearRefreshTokenCookie(res) {
   });
 }
 
-async function createRefreshToken(userId) {
+async function createRefreshToken(userId, familyId = null) {
   const expiresInSeconds = parseRefreshExpiresIn(process.env.REFRESH_TOKEN_EXPIRES_IN || '7d');
   const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashToken(token);
+  const resolvedFamilyId = familyId || crypto.randomUUID();
   await db.query(
-    `INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
-    [userId, tokenHash, expiresAt]
+    `INSERT INTO refresh_tokens (user_id, token_hash, expires_at, family_id) VALUES ($1, $2, $3, $4)`,
+    [userId, tokenHash, expiresAt, resolvedFamilyId]
   );
-  return { token, expiresAt };
+  return { token, expiresAt, familyId: resolvedFamilyId };
 }
 
 function parseRefreshExpiresIn(value) {
@@ -143,15 +144,42 @@ function parseRefreshExpiresIn(value) {
 async function validateRefreshToken(token) {
   const tokenHash = hashToken(token);
   const { rows } = await db.query(
-    `SELECT rt.id, rt.user_id, u.id AS id, u.email, u.name, u.role, u.wallet_public_key,
+    `SELECT rt.id AS token_id, rt.user_id, rt.family_id, rt.revoked_at, rt.expires_at,
+            u.id AS id, u.email, u.name, u.role, u.wallet_public_key, u.wallet_type,
             u.kyc_status, u.kyc_completed_at
      FROM refresh_tokens rt
      JOIN users u ON u.id = rt.user_id
-     WHERE rt.token_hash = $1 AND rt.revoked_at IS NULL AND rt.expires_at > NOW()`,
+     WHERE rt.token_hash = $1`,
     [tokenHash]
   );
   if (!rows.length) return null;
-  return rows[0];
+  const rt = rows[0];
+
+  if (rt.revoked_at) {
+    logger.warn('Refresh token reuse detected, revoking session family', {
+      user_id: rt.user_id,
+      family_id: rt.family_id,
+      token_id: rt.token_id,
+    });
+    if (rt.family_id) {
+      await db.query(
+        `UPDATE refresh_tokens SET revoked_at = NOW() WHERE family_id = $1 AND revoked_at IS NULL`,
+        [rt.family_id]
+      );
+    } else {
+      await db.query(
+        `UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
+        [rt.user_id]
+      );
+    }
+    return { reuseDetected: true, user_id: rt.user_id, family_id: rt.family_id };
+  }
+
+  if (new Date(rt.expires_at) <= new Date()) {
+    return null;
+  }
+
+  return rt;
 }
 
 async function revokeRefreshToken(token) {
@@ -162,9 +190,9 @@ async function revokeRefreshToken(token) {
   );
 }
 
-async function rotateRefreshToken(oldToken, userId) {
+async function rotateRefreshToken(oldToken, userId, familyId = null) {
   await revokeRefreshToken(oldToken);
-  return createRefreshToken(userId);
+  return createRefreshToken(userId, familyId);
 }
 
 router.post('/register', registerLimiter, registerValidation, validateRequest, async (req, res) => {
@@ -409,12 +437,18 @@ router.post('/refresh', async (req, res) => {
   }
 
   const user = await validateRefreshToken(token);
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid or expired refresh token' });
+  if (!user || user.reuseDetected) {
+    clearRefreshTokenCookie(res);
+    clearAccessTokenCookie(res);
+    return res.status(401).json({
+      error: user?.reuseDetected
+        ? 'Refresh token reuse detected; session revoked'
+        : 'Invalid or expired refresh token',
+    });
   }
 
   const { accessToken } = generateTokens(user);
-  const { token: newRefreshToken, expiresAt } = await rotateRefreshToken(token, user.id);
+  const { token: newRefreshToken, expiresAt } = await rotateRefreshToken(token, user.id, user.family_id);
 
   setRefreshTokenCookie(res, newRefreshToken, expiresAt);
   setAccessTokenCookie(res, accessToken);
@@ -533,3 +567,9 @@ router.post(
 );
 
 module.exports = router;
+module.exports.createRefreshToken = createRefreshToken;
+module.exports.validateRefreshToken = validateRefreshToken;
+module.exports.revokeRefreshToken = revokeRefreshToken;
+module.exports.rotateRefreshToken = rotateRefreshToken;
+module.exports.hashToken = hashToken;
+module.exports.REFRESH_TOKEN_COOKIE_NAME = REFRESH_TOKEN_COOKIE_NAME;
