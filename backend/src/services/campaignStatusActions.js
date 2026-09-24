@@ -10,6 +10,7 @@ const {
 const { buildWithdrawalTransaction } = require('./stellarService');
 const { insertWithdrawalPendingSignatures } = require('./stellarTransactionService');
 const { invokeContract } = require('./sorobanService');
+const { sendAlert } = require('./alerting');
 
 function frontendBaseUrl() {
   return (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
@@ -402,6 +403,21 @@ async function handleFailedTransition(campaign) {
   });
 }
 
+async function executeWithRetry(fn, retries = 2, delayMs = 50) {
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Run downstream actions after a campaign transitions to funded or failed.
  * Idempotent: duplicate calls for the same terminal status are no-ops.
@@ -422,6 +438,7 @@ async function triggerCampaignStatusActions(campaign, previousStatus) {
   const fullCampaign = await loadCampaignContext(campaign.id);
   if (!fullCampaign) {
     logger.error('Campaign not found for status actions', { campaign_id: campaign.id });
+    await db.query('DELETE FROM campaign_status_events WHERE id = $1', [eventId]).catch(() => {});
     return;
   }
 
@@ -432,12 +449,31 @@ async function triggerCampaignStatusActions(campaign, previousStatus) {
     event_id: eventId,
   });
 
-  if (campaign.status === 'funded') {
-    await handleFundedTransition(fullCampaign);
-  } else {
-    await handleFailedTransition(fullCampaign);
+  try {
+    await executeWithRetry(async () => {
+      if (campaign.status === 'funded') {
+        await handleFundedTransition(fullCampaign);
+      } else {
+        await handleFailedTransition(fullCampaign);
+      }
+    });
+  } catch (err) {
+    logger.error('Campaign status downstream side effects failed', {
+      campaign_id: campaign.id,
+      status: campaign.status,
+      error: err.message,
+    });
+    await sendAlert('Campaign status downstream side effects failed', {
+      campaign_id: campaign.id,
+      status: campaign.status,
+      error: err.message,
+    });
+    // Remove the recorded transition so that subsequent replays are not suppressed
+    await db.query('DELETE FROM campaign_status_events WHERE id = $1', [eventId]).catch(() => {});
+    throw err;
   }
 }
+
 
 module.exports = {
   triggerCampaignStatusActions,
