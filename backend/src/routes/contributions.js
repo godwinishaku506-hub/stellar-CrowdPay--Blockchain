@@ -43,6 +43,34 @@ const contributionPostLimiter = rateLimit({
   skip: () => isTest,
 });
 
+const prepareLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: isTest ? 100000 : 10,
+  keyGenerator: (req) => {
+    const userId = req.user?.userId || req.user?.id;
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+    return userId ? `${userId}_${ip}` : String(ip);
+  },
+  message: { error: 'Too many prepare requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTest,
+});
+
+const submitSignedLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: isTest ? 100000 : 10,
+  keyGenerator: (req) => {
+    const userId = req.user?.userId || req.user?.id || req.ip;
+    const prepareToken = req.body?.prepare_token || '';
+    return prepareToken ? `${userId}_${prepareToken}` : `${userId}_${req.ip}`;
+  },
+  message: { error: 'Too many submission requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTest,
+});
+
 /**
  * @openapi
  * tags:
@@ -294,7 +322,7 @@ router.get('/quote', requireAuth, contributionQuoteValidation, validateRequest, 
   });
 }));
 
-router.post('/prepare', requireAuth, contributionValidation, validateRequest, asyncHandler(async (req, res) => {
+router.post('/prepare', requireAuth, prepareLimiter, contributionValidation, validateRequest, asyncHandler(async (req, res) => {
   const { campaign_id, amount, send_asset, sender_public_key, display_name } = req.body;
   if (!sender_public_key) {
     return res.status(422).json({
@@ -390,7 +418,7 @@ router.post('/prepare', requireAuth, contributionValidation, validateRequest, as
   }
 }));
 
-router.post('/submit-signed', requireAuth, asyncHandler(async (req, res) => {
+router.post('/submit-signed', requireAuth, submitSignedLimiter, asyncHandler(async (req, res) => {
   const { signed_xdr, prepare_token } = req.body;
   if (!signed_xdr || !prepare_token) {
     return res.status(400).json({ error: 'signed_xdr and prepare_token are required' });
