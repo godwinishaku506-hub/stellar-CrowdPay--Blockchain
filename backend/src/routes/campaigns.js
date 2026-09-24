@@ -401,7 +401,6 @@ router.get('/:id', asyncHandler(async (req, res) => {
     FROM campaigns
     WHERE id = $1
   `;
-  await refreshCampaignStatus(req.params.id);
   const { rows } = await db.query(query, [req.params.id]);
   if (!rows.length) return res.status(404).json({ error: 'Campaign not found' });
   
@@ -579,6 +578,42 @@ router.get('/:id/balance', asyncHandler(async (req, res) => {
 router.post('/cron/fail-expired', requireAuth, requireRole('admin'), asyncHandler(async (req, res) => {
   const { failed, funded } = await refreshActiveCampaignStatuses();
   res.json({ failedCampaigns: failed, fundedCampaigns: funded });
+}));
+
+// Authorized on-demand endpoint to refresh campaign status
+router.post('/:id/refresh-status', requireAuth, asyncHandler(async (req, res) => {
+  /**
+   * @openapi
+   * /api/campaigns/{id}/refresh-status:
+   *   post:
+   *     tags: [Campaigns]
+   *     summary: Refresh campaign status on demand (authorized)
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: Status refreshed
+   *       403:
+   *         description: Forbidden
+   *       404:
+   *         description: Not found
+   */
+  const { id } = req.params;
+  const { rows } = await db.query('SELECT creator_id, status FROM campaigns WHERE id = $1', [id]);
+  if (!rows.length) return res.status(404).json({ error: 'Campaign not found' });
+
+  const isOwner = rows[0].creator_id === req.user.userId;
+  const isAdmin = req.user.role === 'admin' || req.user.is_admin;
+  if (!isOwner && !isAdmin) {
+    return res.status(403).json({ error: 'You do not have permission to refresh this campaign status' });
+  }
+
+  const result = await refreshCampaignStatus(id);
+  const { rows: updatedRows } = await db.query('SELECT * FROM campaigns WHERE id = $1', [id]);
+  res.json({ campaign: updatedRows[0], statusResult: result });
 }));
 
 // Scheduled endpoint to send 48h deadline reminders
