@@ -88,6 +88,29 @@ router.get('/campaigns', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/campaigns/deleted
+ * List only deleted campaigns
+ */
+router.get('/campaigns/deleted', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT c.id, c.title, c.status, c.raised_amount, c.target_amount, 
+              c.asset_type, c.created_at, c.deleted_at,
+              u.id as creator_id, u.name as creator_name, u.email as creator_email,
+              (SELECT COUNT(*) FROM contributions WHERE campaign_id = c.id) as contribution_count
+       FROM campaigns c 
+       JOIN users u ON c.creator_id = u.id
+       WHERE c.deleted_at IS NOT NULL
+       ORDER BY c.deleted_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    logger.error('Error fetching deleted campaigns for admin', { error: err.message });
+    res.status(500).json({ error: 'Failed to fetch deleted campaigns' });
+  }
+});
+
+/**
  * PATCH /api/admin/campaigns/:id/suspend
  * Suspend a campaign (prevent new contributions)
  */
@@ -129,14 +152,14 @@ router.patch('/campaigns/:id/suspend', async (req, res) => {
 
 /**
  * PATCH /api/admin/campaigns/:id/restore
- * Restore a suspended campaign to active
+ * Restore a suspended campaign to active, or restore a soft-deleted campaign
  */
 router.patch('/campaigns/:id/restore', async (req, res) => {
   try {
     const { id } = req.params;
 
     const { rows: campaignRows } = await db.query(
-      'SELECT id, status FROM campaigns WHERE id = $1 AND deleted_at IS NULL',
+      'SELECT id, status, deleted_at FROM campaigns WHERE id = $1',
       [id]
     );
 
@@ -146,8 +169,26 @@ router.patch('/campaigns/:id/restore', async (req, res) => {
 
     const campaign = campaignRows[0];
 
+    // Handle soft-deleted campaign restoration
+    if (campaign.deleted_at) {
+      const { rows: updated } = await db.query(
+        `UPDATE campaigns SET deleted_at = NULL, status = 'active' WHERE id = $1 RETURNING id, title, status, deleted_at`,
+        [id]
+      );
+
+      await logAdminAction(req.user.userId, 'restore', 'campaign', id, { 
+        restored_from: 'deleted'
+      });
+
+      logger.info('Soft-deleted campaign restored', { campaignId: id, adminId: req.user.userId });
+      cache.invalidate(`campaigns:id:${id}`);
+      cache.invalidatePrefix('campaigns:list:');
+      return res.json({ message: 'Campaign restored from deleted', campaign: updated[0] });
+    }
+
+    // Handle suspended campaign restoration
     if (campaign.status !== 'suspended') {
-      return res.status(400).json({ error: 'Only suspended campaigns can be restored' });
+      return res.status(400).json({ error: 'Only suspended or deleted campaigns can be restored' });
     }
 
     const { rows: updated } = await db.query(
