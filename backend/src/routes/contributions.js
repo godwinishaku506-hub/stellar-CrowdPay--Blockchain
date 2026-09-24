@@ -28,6 +28,7 @@ const {
 } = require('../services/contributionService');
 const { listUserContributions } = require('../services/userDashboardService');
 const asyncHandler = require('../utils/asyncHandler');
+const { parseAmountToStroops, formatStroops } = require('../utils/amounts');
 
 const SUPPORTED_ASSETS = getSupportedAssetCodes();
 const PREPARED_CONTRIBUTION_EXPIRES_IN = '10m';
@@ -317,7 +318,7 @@ router.post('/prepare', requireAuth, contributionValidation, validateRequest, as
   const campaign = await loadActiveCampaign(campaign_id);
   if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
 
-  if (campaign.min_contribution && parseFloat(amount) < parseFloat(campaign.min_contribution)) {
+  if (campaign.min_contribution && parseAmountToStroops(amount) < parseAmountToStroops(campaign.min_contribution)) {
     return res.status(400).json({ error: `Contribution amount is below the minimum limit of ${campaign.min_contribution} ${campaign.asset_type}` });
   }
 
@@ -326,8 +327,8 @@ router.post('/prepare', requireAuth, contributionValidation, validateRequest, as
       'SELECT COALESCE(SUM(amount), 0) as total FROM contributions WHERE campaign_id = $1 AND sender_public_key = $2',
       [campaign_id, sender_public_key]
     );
-    const totalExisting = parseFloat(sumRows[0].total);
-    if (totalExisting + parseFloat(amount) > parseFloat(campaign.max_contribution)) {
+    const totalExisting = parseAmountToStroops(sumRows[0].total);
+    if (totalExisting + parseAmountToStroops(amount) > parseAmountToStroops(campaign.max_contribution)) {
       return res.status(400).json({ error: `Contribution violates the maximum limit of ${campaign.max_contribution} ${campaign.asset_type} per backer` });
     }
   }
@@ -510,33 +511,33 @@ router.post(
     );
     const contributorPublicKey = users[0].wallet_public_key;
 
-    if (
-      campaign.min_contribution &&
-      parseFloat(amount) < parseFloat(campaign.min_contribution)
-    ) {
+if (
+    campaign.min_contribution &&
+    parseAmountToStroops(amount) < parseAmountToStroops(campaign.min_contribution)
+  ) {
+    return res.status(400).json({
+      error: `Minimum contribution is ${campaign.min_contribution} ${campaign.asset_type}`,
+    });
+  }
+
+  if (campaign.max_contribution && parseAmountToStroops(amount) > parseAmountToStroops(campaign.max_contribution)) {
+    return res.status(400).json({
+      error: `Maximum contribution is ${campaign.max_contribution} ${campaign.asset_type}`,
+    });
+  }
+
+  if (campaign.max_per_user) {
+    const { rows: userCapRows } = await db.query(
+      'SELECT COALESCE(SUM(amount), 0) AS total FROM contributions WHERE campaign_id = $1 AND sender_public_key = $2',
+      [campaign_id, contributorPublicKey],
+    );
+    const alreadyContributed = parseAmountToStroops(userCapRows[0].total);
+    if (alreadyContributed + parseAmountToStroops(amount) > parseAmountToStroops(campaign.max_per_user)) {
       return res.status(400).json({
-        error: `Minimum contribution is ${campaign.min_contribution} ${campaign.asset_type}`,
+        error: `You have already contributed ${formatStroops(alreadyContributed)} ${campaign.asset_type}. The per-contributor limit is ${campaign.max_per_user}.`,
       });
     }
-
-    if (campaign.max_contribution && parseFloat(amount) > parseFloat(campaign.max_contribution)) {
-      return res.status(400).json({
-        error: `Maximum contribution is ${campaign.max_contribution} ${campaign.asset_type}`,
-      });
-    }
-
-    if (campaign.max_per_user) {
-      const { rows: userCapRows } = await db.query(
-        'SELECT COALESCE(SUM(amount), 0) AS total FROM contributions WHERE campaign_id = $1 AND sender_public_key = $2',
-        [campaign_id, contributorPublicKey],
-      );
-      const alreadyContributed = parseFloat(userCapRows[0].total);
-      if (alreadyContributed + parseFloat(amount) > parseFloat(campaign.max_per_user)) {
-        return res.status(400).json({
-          error: `You have already contributed ${alreadyContributed} ${campaign.asset_type}. The per-contributor limit is ${campaign.max_per_user}.`,
-        });
-      }
-    }
+  }
 
     try {
       const result = await submitCustodialContribution({
@@ -554,7 +555,7 @@ router.post(
         stellar_transaction_id: result.stellarTransactionId,
         message: "Transaction submitted",
         conversion_quote: result.conversionQuote,
-        ...(result.platform_fee_amount != null
+        ...(result.platform_fee_amount !== null && result.platform_fee_amount !== undefined
           ? { platform_fee_amount: result.platform_fee_amount }
           : {}),
       });
@@ -587,7 +588,7 @@ router.post(
       });
     }
 
-    if (Number(campaign.raised_amount) + Number(amount) >= Number(campaign.target_amount)) {
+    if (parseAmountToStroops(campaign.raised_amount) + parseAmountToStroops(amount) >= parseAmountToStroops(campaign.target_amount)) {
       sendEmail({
         to: campaign.creator_email,
         subject: `Target Reached for ${campaign.title}!`,
