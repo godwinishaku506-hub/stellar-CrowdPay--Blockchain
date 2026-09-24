@@ -245,6 +245,13 @@ const contributionValidation = [
     .withMessage('Display name must be at most 50 characters'),
 ];
 
+const updateUserValidation = [
+  body('name')
+    .customSanitizer(stripHtml)
+    .notEmpty()
+    .withMessage('name is required'),
+];
+
 const withdrawalValidation = [
   body('campaign_id')
     .notEmpty()
@@ -319,6 +326,7 @@ module.exports = {
   VALID_CAMPAIGN_STATUSES,
   VALID_ORDER_BY,
   registerValidation,
+  updateUserValidation,
   loginValidation,
   forgotPasswordValidation,
   resetPasswordValidation,
