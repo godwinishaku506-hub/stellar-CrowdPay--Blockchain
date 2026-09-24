@@ -55,6 +55,60 @@ function buildApp({
   return app;
 }
 
+test('GET /api/campaigns/:id/embed preserves UUIDs and returns live widget data', async () => {
+  let queryParams;
+  const app = buildApp({
+    queryImpl: async (text, params) => {
+      if (text.includes('FROM campaigns') && text.includes('backer_count')) {
+        queryParams = params;
+        return {
+          rows: [{
+            id: '11111111-1111-1111-1111-111111111111',
+            title: 'Community fund',
+            description: 'A project',
+            target_amount: '100',
+            raised_amount: '25',
+            asset_type: 'XLM',
+            status: 'active',
+            backer_count: 2,
+          }],
+        };
+      }
+      return { rows: [] };
+    },
+    buildWithdrawalTransactionImpl: async () => '',
+    insertWithdrawalPendingSignaturesImpl: async () => 'tx-row',
+  });
+
+  const response = await request(app).get('/api/campaigns/11111111-1111-1111-1111-111111111111/embed');
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(queryParams, ['11111111-1111-1111-1111-111111111111']);
+  assert.equal(response.body.progress_percentage, 25);
+  assert.equal(response.body.contributor_count, 2);
+});
+
+test('GET /api/campaigns/:id/analytics returns documented public analytics', async () => {
+  const app = buildApp({
+    queryImpl: async (text) => {
+      if (text.includes('SELECT id FROM campaigns')) return { rows: [{ id: 'camp-1' }] };
+      if (text.includes('DATE(created_at)')) return { rows: [{ day: '2026-09-24', contribution_count: '1', total_amount: '5', asset: 'XLM' }] };
+      if (text.includes('COALESCE(source_asset')) return { rows: [{ paid_with: 'XLM', count: '1', total_sent: '5' }] };
+      if (text.includes('SUM(amount) AS total')) return { rows: [{ sender_public_key: 'G...', total: '5', times: '1' }] };
+      return { rows: [] };
+    },
+    buildWithdrawalTransactionImpl: async () => '',
+    insertWithdrawalPendingSignaturesImpl: async () => 'tx-row',
+  });
+
+  const response = await request(app).get('/api/campaigns/camp-1/analytics');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.dailyTotals.length, 1);
+  assert.equal(response.body.assetBreakdown[0].paid_with, 'XLM');
+  assert.equal(response.body.topContributors[0].times, '1');
+});
+
 test('POST /api/campaigns/cron/fail-expired returns failed and funded campaigns', async () => {
   const app = buildApp({
     queryImpl: async () => ({ rows: [] }),

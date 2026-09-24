@@ -628,7 +628,7 @@ export default function Campaign() {
   const canPostUpdate =
     currentUserId && String(campaign.creator_id) === String(currentUserId);
   const campaignUrl = `${window.location.origin}/campaigns/${id}`;
-  const embedCode = `<iframe src="${window.location.origin}/widget/campaigns/${id}" width="320" height="120" frameborder="0" style="border-radius:10px"></iframe>`;
+  const embedCode = `<iframe src="${window.location.origin}/widget/campaigns/${id}" width="320" height="120" frameborder="0" title="CrowdPay campaign"></iframe>`;
 
   function canEditUpdate(update) {
     return (

@@ -303,6 +303,16 @@ List withdrawal requests for a campaign (`denial_reason` included when denied). 
 
 Immutable audit timeline for one withdrawal: `action`, `actor_user_id`, `note`, `metadata`, `created_at`. Same authorization as the campaign list endpoint.
 
+### `GET /api/campaigns/:id/embed`
+
+Public, CORS-enabled campaign payload for iframe embeds. The campaign ID is a UUID and must be passed unchanged. Returns campaign title, description, amounts, asset, status, progress percentage, contributor count, and a contribution URL.
+
+`GET /api/campaigns/:id/widget` is an equivalent alias for polling widgets. The frontend widget refreshes this endpoint every 30 seconds, while `/api/campaigns/:id/stream` provides live SSE updates.
+
+### `GET /api/campaigns/:id/analytics`
+
+Public contribution analytics for the last 30 days. Returns `dailyTotals`, `assetBreakdown`, and `topContributors`. Deleted or unknown campaigns return `404`.
+
 ### `GET /api/milestones/campaign/:campaignId`
 
 List milestones for a campaign in display order.

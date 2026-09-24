@@ -449,28 +449,22 @@ router.get('/:id', asyncHandler(async (req, res) => {
   res.json(response);
 }));
 
-// Embeddable campaign widget data (public, with permissive CORS)
-router.get('/:id/embed', asyncHandler(async (req, res) => {
-  // Allow this endpoint to be accessed from any origin for embedding
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-
-  const campaignId = parseInt(req.params.id, 10);
+async function getPublicCampaignWidget(campaignId) {
   const { rows } = await db.query(
     `SELECT id, title, description, target_amount, raised_amount, asset_type, status,
             (SELECT COUNT(*)::int FROM contributions c WHERE c.campaign_id = campaigns.id) AS backer_count
-     FROM campaigns WHERE id = $1`,
+     FROM campaigns
+     WHERE id = $1 AND deleted_at IS NULL`,
     [campaignId]
   );
-  if (!rows.length) return res.status(404).json({ error: 'Campaign not found' });
+  if (!rows.length) return null;
 
   const campaign = rows[0];
   const pct = campaign.target_amount
     ? Math.min(100, (Number(campaign.raised_amount) / Number(campaign.target_amount)) * 100)
     : 0;
 
-  res.json({
+  return {
     id: campaign.id,
     title: campaign.title,
     description: campaign.description?.slice(0, 200) + (campaign.description?.length > 200 ? '...' : ''),
@@ -479,10 +473,28 @@ router.get('/:id/embed', asyncHandler(async (req, res) => {
     asset_type: campaign.asset_type,
     status: campaign.status,
     backer_count: campaign.backer_count,
+    contributor_count: campaign.backer_count,
     progress_percentage: Math.round(pct * 10) / 10,
     contribution_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${campaign.id}`,
-  });
-}));
+  };
+}
+
+function allowEmbedCors(res) {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+async function sendPublicCampaignWidget(req, res) {
+  allowEmbedCors(res);
+  const campaign = await getPublicCampaignWidget(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+  res.json(campaign);
+}
+
+// Embeddable campaign widget data (public, with permissive CORS)
+router.get('/:id/embed', asyncHandler(sendPublicCampaignWidget));
+router.get('/:id/widget', asyncHandler(sendPublicCampaignWidget));
 
 // Get backers for a campaign
 router.get('/:id/backers', asyncHandler(async (req, res) => {
@@ -508,7 +520,7 @@ router.get('/:id/backers', asyncHandler(async (req, res) => {
 
 // SSE stream for real-time campaign funding updates
 router.get('/:id/stream', asyncHandler(async (req, res) => {
-  const campaignId = parseInt(req.params.id, 10);
+  const campaignId = req.params.id;
   const { rows } = await db.query('SELECT id FROM campaigns WHERE id = $1', [campaignId]);
   if (!rows.length) return res.status(404).json({ error: 'Campaign not found' });
 
@@ -1093,8 +1105,29 @@ router.post('/:id/members/accept', requireAuth, asyncHandler(async (req, res) =>
   res.json(rows[0]);
 }));
 
-// GET /campaigns/:id/analytics — campaign analytics
+// GET /campaigns/:id/analytics — public campaign analytics for dashboards and embeds
 router.get('/:id/analytics', asyncHandler(async (req, res) => {
+  /**
+   * @openapi
+   * /api/campaigns/{id}/analytics:
+   *   get:
+   *     tags: [Campaigns]
+   *     summary: Get public contribution analytics for a campaign
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema: { type: string, format: uuid }
+   *     responses:
+   *       200: { description: Contribution totals by day, asset, and backer }
+   *       404: { description: Campaign not found }
+   */
+  const { rows: campaignRows } = await db.query(
+    'SELECT id FROM campaigns WHERE id = $1 AND deleted_at IS NULL',
+    [req.params.id]
+  );
+  if (!campaignRows.length) return res.status(404).json({ error: 'Campaign not found' });
+
   const { rows: dailyTotals } = await db.query(`
     SELECT
       DATE(created_at) AS day,
