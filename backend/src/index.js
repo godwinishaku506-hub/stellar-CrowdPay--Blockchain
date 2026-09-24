@@ -24,6 +24,7 @@ const { refreshActiveCampaignStatuses } = require('./services/campaignStatusServ
 const { sendAlert } = require('./services/alerting');
 const { assertNoLegacyPlaintextUserWalletSecrets } = require('./services/walletSecrets');
 const db = require('./config/database');
+const { getPlatformFeeBps } = require('./utils/amounts');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const rateLimit = require('express-rate-limit');
@@ -121,7 +122,7 @@ app.get('/health', async (_, res) => {
   }
 });
 app.get('/api/config', (_, res) =>
-  res.json({ platform_fee_bps: parseInt(process.env.PLATFORM_FEE_BPS || '0', 10) })
+  res.json({ platform_fee_bps: getPlatformFeeBps() })
 );
 
 // Public platform stats — used on the hero / landing section.
@@ -133,7 +134,7 @@ app.get('/api/stats', async (_req, res) => {
   if (cached) return res.json(cached);
 
   try {
-    const db = require('./config/database');
+const db = require('./config/database');
     const [campaigns, raised, contributions] = await Promise.all([
       db.query(`SELECT COUNT(*)::int AS total
                 FROM campaigns

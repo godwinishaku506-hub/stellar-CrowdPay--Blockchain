@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { stellarExpertTxUrl } from '../config/stellar';
+import { calculateFee } from '../lib/amounts';
 
 const SEND_OPTIONS = [
   { value: 'XLM', label: 'XLM', hint: 'Native Stellar' },
@@ -712,8 +713,7 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
               {feeBps > 0 && destAmount && Number(destAmount) > 0 && (
                 <div className="alert alert--info" style={{ marginTop: '0.85rem', fontSize: '0.875rem' }} role="status">
                   {(() => {
-                    const feeAmt = (Number(destAmount) * feeBps / 10000).toFixed(7);
-                    const netAmt = (Number(destAmount) - Number(feeAmt)).toFixed(7);
+                    const { feeAmount: feeAmt, netAmount: netAmt } = calculateFee(destAmount, feeBps);
                     return (
                       <>
                         <strong>Platform fee:</strong> {feeBps / 100}% = {feeAmt} {campaign.asset_type}

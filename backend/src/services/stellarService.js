@@ -34,11 +34,29 @@ const {
 
 const PLATFORM_KEYPAIR = Keypair.fromSecret(process.env.PLATFORM_SECRET_KEY);
 
+const {
+  parseAmountToStroops,
+  formatStroops,
+  calculateFeeStroops,
+  getPlatformFeeBps,
+} = require('../utils/amounts');
+
+/**
+ * Compute the platform fee split for a contribution using exact stroop math.
+ * Returns decimal strings (never floats) plus the stroop quantities so callers
+ * can branch on exact values. Guarantees fee + campaign amount == amount.
+ */
 function calcFee(amount) {
-  const bps = parseInt(process.env.PLATFORM_FEE_BPS || '0', 10);
-  const fee = parseFloat((parseFloat(amount) * bps / 10000).toFixed(7));
-  const net = parseFloat((parseFloat(amount) - fee).toFixed(7));
-  return { feeAmount: fee, campaignAmount: net, bps };
+  const bps = getPlatformFeeBps();
+  const amountStroops = parseAmountToStroops(amount);
+  const { feeStroops, netStroops } = calculateFeeStroops(amountStroops, bps);
+  return {
+    feeAmount: formatStroops(feeStroops),
+    campaignAmount: formatStroops(netStroops),
+    feeStroops,
+    campaignStroops: netStroops,
+    bps,
+  };
 }
 
 function toStellarAsset(assetCode) {
@@ -244,23 +262,23 @@ async function buildUnsignedContributionPayment({
 }) {
   const senderAccount = await server.loadAccount(senderPublicKey);
   const stellarAsset = toStellarAsset(asset);
-  const { feeAmount, campaignAmount } = calcFee(amount);
+  const { feeAmount, campaignAmount, feeStroops } = calcFee(amount);
 
   const builder = new TransactionBuilder(senderAccount, { fee: BASE_FEE, networkPassphrase })
     .addOperation(
       Operation.payment({
         destination: destinationPublicKey,
         asset: stellarAsset,
-        amount: String(campaignAmount),
+        amount: campaignAmount,
       })
     );
 
-  if (feeAmount > 0) {
+  if (feeStroops > 0n) {
     builder.addOperation(
       Operation.payment({
         destination: PLATFORM_KEYPAIR.publicKey(),
         asset: stellarAsset,
-        amount: String(feeAmount),
+        amount: feeAmount,
       })
     );
   }
@@ -318,36 +336,38 @@ async function buildUnsignedContributionPathPayment({
   const senderAccount = await server.loadAccount(senderPublicKey);
   const sourceStellarAsset = toStellarAsset(sendAsset);
   const destStellarAsset = toStellarAsset(destAssetCode);
-  const { feeAmount, campaignAmount, bps } = calcFee(destAmount);
+  const { feeAmount, campaignAmount, feeStroops, bps } = calcFee(destAmount);
 
-  const sendMaxFloat = parseFloat(sendMax);
-  const campaignSendMax = feeAmount > 0
-    ? ((sendMaxFloat * (1 - bps / 10000)).toFixed(7))
-    : sendMax;
-  const feeSendMax = feeAmount > 0
-    ? ((sendMaxFloat * (bps / 10000)).toFixed(7))
-    : '0';
+  // Split the send asset amount into campaign + fee using the same exact
+  // stroop math as calcFee, so campaign sendMax + fee sendMax == sendMax.
+  const sendMaxStroops = parseAmountToStroops(sendMax);
+  const {
+    feeStroops: feeSendMaxStroops,
+    netStroops: campaignSendMaxStroops,
+  } = calculateFeeStroops(sendMaxStroops, bps);
+  const campaignSendMax = formatStroops(campaignSendMaxStroops);
+  const feeSendMax = formatStroops(feeSendMaxStroops);
 
   const builder = new TransactionBuilder(senderAccount, { fee: BASE_FEE, networkPassphrase })
     .addOperation(
       Operation.pathPaymentStrictReceive({
         sendAsset: sourceStellarAsset,
-        sendMax: String(campaignSendMax),
+        sendMax: campaignSendMax,
         destination: destinationPublicKey,
         destAsset: destStellarAsset,
-        destAmount: String(campaignAmount),
+        destAmount: campaignAmount,
         path: [],
       })
     );
 
-  if (feeAmount > 0) {
+  if (feeStroops > 0n) {
     builder.addOperation(
       Operation.pathPaymentStrictReceive({
         sendAsset: sourceStellarAsset,
-        sendMax: String(feeSendMax),
+        sendMax: feeSendMax,
         destination: PLATFORM_KEYPAIR.publicKey(),
         destAsset: destStellarAsset,
-        destAmount: String(feeAmount),
+        destAmount: feeAmount,
         path: [],
       })
     );
@@ -641,6 +661,7 @@ module.exports = {
   buildUnsignedContributionPathPayment,
   prepareSignedContributionPayment,
   prepareSignedContributionPathPayment,
+  calcFee,
   submitPayment,
   submitPathPayment,
   submitPreparedTransaction,
