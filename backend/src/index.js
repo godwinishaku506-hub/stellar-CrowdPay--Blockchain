@@ -61,8 +61,7 @@ const globalApiLimiter = rateLimit({
       p === '/auth/register' ||
       p === '/users/register' ||
       p === '/auth/login' ||
-      p === '/users/login' ||
-      p === '/contributions'
+      p === '/users/login'
     );
   },
 });
