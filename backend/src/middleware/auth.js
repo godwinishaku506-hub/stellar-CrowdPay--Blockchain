@@ -124,6 +124,16 @@ function requireAuth(req, res, next) {
   authenticate(req)
     .then(() => {
       if (!assertApiKeyScopes(req, res)) return;
+
+      // Reject banned users on every authenticated route.
+      // Admins are exempt so they can still access the admin panel
+      // (e.g. to unban the user or review the account).
+      if (req.user?.is_banned && !req.user?.is_admin) {
+        return res.status(403).json({
+          error: 'Your account has been suspended. Contact support if you believe this is a mistake.',
+        });
+      }
+
       if (req.user?.userId) Sentry.setUser({ id: req.user.userId });
       next();
     })

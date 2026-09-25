@@ -17,14 +17,30 @@ async function reconcileCampaign(campaign) {
     const liveBalance = parseFloat(onChain[campaign.asset_type] || '0');
     const dbBalance = parseFloat(campaign.raised_amount);
 
-    if (Math.abs(liveBalance - dbBalance) > 0.0000001) {
-      logger.warn(`[reconcile] Campaign ${campaign.id}: DB=${dbBalance} vs chain=${liveBalance}. Updating.`);
+    if (liveBalance > dbBalance + 0.0000001) {
+      // The on-chain balance is higher than what we recorded — there are
+      // contributions we haven't tracked yet (e.g. direct on-chain deposits).
+      // Bring the DB up to the live value.
+      logger.warn(`[reconcile] Campaign ${campaign.id}: DB=${dbBalance} < chain=${liveBalance}. Updating raised_amount upward.`);
       await db.query(
         `UPDATE campaigns SET raised_amount = $1 WHERE id = $2`,
         [liveBalance, campaign.id]
       );
-      return { updated: true, dbBalance, liveBalance };
+      return { updated: true, dbBalance, liveBalance, direction: 'increased' };
     }
+
+    if (liveBalance < dbBalance - 0.0000001) {
+      // The on-chain balance is lower than raised_amount — this is expected
+      // after withdrawals or refunds.  raised_amount is a cumulative total and
+      // must NOT be rolled back; doing so would flip a funded campaign to
+      // failed and corrupt contribution history.
+      logger.warn(
+        `[reconcile] Campaign ${campaign.id}: chain=${liveBalance} < DB=${dbBalance}. ` +
+        `Balance drop is likely due to a withdrawal/refund — raised_amount preserved.`
+      );
+      return { updated: false, dbBalance, liveBalance, direction: 'skipped_decrease' };
+    }
+
     return { updated: false, dbBalance, liveBalance };
   } catch (err) {
     logger.error(`[reconcile] Failed for campaign ${campaign.id}:`, { error: err.message });

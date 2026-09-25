@@ -27,9 +27,86 @@ function normalizeEvents(events) {
   return [...new Set(events.filter((e) => typeof e === 'string' && allowed.has(e)))];
 }
 
+/**
+ * Verify the KYC provider webhook HMAC-SHA256 signature.
+ *
+ * Persona (and compatible providers) send a header in the form:
+ *   Persona-Signature: t=<unix_ts>,v1=<hex_digest>
+ * The signed message is `<ts>.<raw_request_body>`.
+ *
+ * KYC_WEBHOOK_SECRET takes precedence; PERSONA_WEBHOOK_SECRET is accepted as
+ * a legacy alias.  In non-production environments without a secret configured
+ * the check passes with a warning, so local dev still works.
+ */
+function verifyKycWebhookSignature(rawBody, signatureHeader) {
+  const secret =
+    process.env.KYC_WEBHOOK_SECRET ||
+    process.env.PERSONA_WEBHOOK_SECRET;
+
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      return false; // Hard-fail in production with no secret
+    }
+    // Dev convenience: allow but emit a warning
+    return true;
+  }
+
+  if (!signatureHeader) return false;
+
+  // Parse `t=<ts>,v1=<hex>`
+  const parts = {};
+  for (const segment of signatureHeader.split(',')) {
+    const idx = segment.indexOf('=');
+    if (idx > 0) parts[segment.slice(0, idx)] = segment.slice(idx + 1);
+  }
+
+  const ts = parts.t;
+  const provided = (parts.v1 || '').toLowerCase();
+  if (!ts || !provided) return false;
+
+  // Reject payloads older than 5 minutes to prevent replay attacks
+  const drift = Math.abs(Date.now() / 1000 - Number(ts));
+  if (drift > 300) return false;
+
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(`${ts}.${rawBody}`, 'utf8')
+    .digest('hex');
+
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(expected, 'hex'),
+      Buffer.from(provided, 'hex')
+    );
+  } catch {
+    return false;
+  }
+}
+
 router.post('/kyc', async (req, res) => {
+  // Verify HMAC signature before trusting any payload content.
+  // req.rawBody is populated when express.json is configured with a `verify`
+  // callback (standard pattern); fall back to re-serialising the parsed body.
+  const rawBody = req.rawBody != null
+    ? req.rawBody.toString('utf8')
+    : JSON.stringify(req.body || {});
+
+  const sigHeader =
+    req.headers['persona-signature'] ||
+    req.headers['x-webhook-signature'] ||
+    req.headers['x-kyc-signature'] ||
+    '';
+
+  if (!verifyKycWebhookSignature(rawBody, sigHeader)) {
+    return res.status(401).json({ error: 'KYC webhook signature verification failed' });
+  }
+
   const result = extractWebhookResult(req.body || {});
-  if (!result.providerReference && !result.userId) {
+
+  // Require a cryptographically signed provider reference.
+  // We deliberately ignore result.userId — accepting a raw userId from the
+  // request body would allow any caller to self-verify as any user.
+  if (!result.providerReference) {
     return res.status(400).json({ error: 'KYC webhook payload missing provider reference' });
   }
 
@@ -37,21 +114,16 @@ router.post('/kyc', async (req, res) => {
     return res.status(400).json({ error: 'Unsupported KYC status' });
   }
 
-  const params = [result.kycStatus, result.providerReference || null];
-  let lookup = 'kyc_provider_reference = $2';
-  if (result.userId) {
-    params.push(result.userId);
-    lookup = `(kyc_provider_reference = $2 OR id = $3)`;
-  }
-
+  // Look up strictly by the provider reference that was set when the KYC
+  // session was created server-side — never by a userId supplied in the body.
   const { rows } = await db.query(
     `UPDATE users
      SET kyc_status = $1::kyc_status,
          kyc_provider_reference = COALESCE($2, kyc_provider_reference),
          kyc_completed_at = CASE WHEN $1::kyc_status = 'verified' THEN NOW() ELSE NULL END
-     WHERE ${lookup}
+     WHERE kyc_provider_reference = $2
      RETURNING id, kyc_status, kyc_completed_at`,
-    params
+    [result.kycStatus, result.providerReference]
   );
 
   if (!rows.length) {

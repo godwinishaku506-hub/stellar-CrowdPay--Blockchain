@@ -391,7 +391,13 @@ const platformApproveHandler = async (req, res) => {
   if (requestRow.status !== 'pending') {
     return res.status(409).json({ error: 'Withdrawal request is no longer pending' });
   }
-  if (!requestRow.creator_signed) {
+  // For platform-admin-initiated refunds (failed campaigns, dispute resolutions)
+  // creator_signed is pre-set to TRUE when the refund is queued, so this check
+  // should normally pass.  As a safety valve, also allow an admin to approve a
+  // refund even if creator_signed somehow remained FALSE — the whole point of the
+  // admin refund flow is to proceed without requiring the adversarial creator.
+  const isAdminRefund = requestRow.is_refund && req.user.is_admin;
+  if (!requestRow.creator_signed && !isAdminRefund) {
     return res.status(409).json({ error: 'Creator approval is required before platform approval' });
   }
   if (requestRow.platform_signed) {
