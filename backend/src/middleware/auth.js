@@ -4,7 +4,17 @@ const db = require('../config/database');
 const Sentry = require('@sentry/node');
 
 function apiKeyPepper() {
-  return process.env.API_KEY_PEPPER || process.env.JWT_SECRET || 'dev-api-key-pepper';
+  const pepper = process.env.API_KEY_PEPPER;
+  if (!pepper) {
+    // This should never be reached in production because validateEnv() in
+    // config/env.js fails the process at startup when API_KEY_PEPPER is unset.
+    // In tests the value is injected via the test environment.
+    throw new Error(
+      'API_KEY_PEPPER environment variable is required. ' +
+      'Set a dedicated secret independent of JWT_SECRET to prevent credential cross-contamination.'
+    );
+  }
+  return pepper;
 }
 
 function hashApiKey(rawKey) {
