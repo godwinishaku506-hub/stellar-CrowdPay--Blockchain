@@ -425,3 +425,148 @@ test('POST /api/campaigns/:id/refresh-status allows authorized creator or admin'
   assert.equal(refreshCalled, true, 'Authorized POST should refresh campaign status');
 });
 
+
+// ---------------------------------------------------------------------------
+// Issue #20: Campaign invite acceptance must be bound to invited email
+// ---------------------------------------------------------------------------
+
+test('POST /campaigns/:id/members/accept rejects token with mismatched email (403)', async () => {
+  const app = buildApp({
+    authUser: { userId: 'other-user', role: 'contributor' },
+    queryImpl: async (text) => {
+      // invite lookup
+      if (text.includes('FROM campaign_members') && text.includes('invite_token')) {
+        return {
+          rows: [{
+            id: 'member-1',
+            accepted_at: null,
+            email: 'alice@example.com',
+            invite_expires_at: new Date(Date.now() + 86400000), // 1 day from now
+          }],
+        };
+      }
+      // user email lookup
+      if (text.includes('SELECT email FROM users')) {
+        return { rows: [{ email: 'bob@example.com' }] };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns/camp-1/members/accept')
+    .set('Authorization', 'Bearer token')
+    .send({ token: 'validtoken123' });
+
+  assert.equal(response.status, 403);
+  assert.match(response.body.error, /different email/i);
+});
+
+test('POST /campaigns/:id/members/accept succeeds when emails match', async () => {
+  const app = buildApp({
+    authUser: { userId: 'alice-id', role: 'contributor' },
+    queryImpl: async (text) => {
+      if (text.includes('FROM campaign_members') && text.includes('invite_token')) {
+        return {
+          rows: [{
+            id: 'member-1',
+            accepted_at: null,
+            email: 'alice@example.com',
+            invite_expires_at: new Date(Date.now() + 86400000),
+          }],
+        };
+      }
+      if (text.includes('SELECT email FROM users')) {
+        return { rows: [{ email: 'alice@example.com' }] };
+      }
+      if (text.includes('UPDATE campaign_members')) {
+        return {
+          rows: [{
+            id: 'member-1',
+            campaign_id: 'camp-1',
+            user_id: 'alice-id',
+            role: 'manager',
+            accepted_at: new Date().toISOString(),
+          }],
+        };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns/camp-1/members/accept')
+    .set('Authorization', 'Bearer token')
+    .send({ token: 'validtoken123' });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.user_id, 'alice-id');
+});
+
+test('POST /campaigns/:id/members/accept rejects expired invites (410)', async () => {
+  const app = buildApp({
+    authUser: { userId: 'alice-id', role: 'contributor' },
+    queryImpl: async (text) => {
+      if (text.includes('FROM campaign_members') && text.includes('invite_token')) {
+        return {
+          rows: [{
+            id: 'member-1',
+            accepted_at: null,
+            email: 'alice@example.com',
+            invite_expires_at: new Date(Date.now() - 1000), // expired 1 second ago
+          }],
+        };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns/camp-1/members/accept')
+    .set('Authorization', 'Bearer token')
+    .send({ token: 'expiredtoken' });
+
+  assert.equal(response.status, 410);
+  assert.match(response.body.error, /expired/i);
+});
+
+test('POST /campaigns/:id/members/accept rejects already-accepted invite (409)', async () => {
+  const app = buildApp({
+    authUser: { userId: 'alice-id', role: 'contributor' },
+    queryImpl: async (text) => {
+      if (text.includes('FROM campaign_members') && text.includes('invite_token')) {
+        return {
+          rows: [{
+            id: 'member-1',
+            accepted_at: new Date().toISOString(),
+            email: 'alice@example.com',
+            invite_expires_at: new Date(Date.now() + 86400000),
+          }],
+        };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns/camp-1/members/accept')
+    .set('Authorization', 'Bearer token')
+    .send({ token: 'usedtoken' });
+
+  assert.equal(response.status, 409);
+  assert.match(response.body.error, /already accepted/i);
+});
+
+test('POST /campaigns/:id/members/accept returns 404 for invalid token', async () => {
+  const app = buildApp({
+    authUser: { userId: 'alice-id', role: 'contributor' },
+    queryImpl: async () => ({ rows: [] }),
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns/camp-1/members/accept')
+    .set('Authorization', 'Bearer token')
+    .send({ token: 'nosuchtoken' });
+
+  assert.equal(response.status, 404);
+});

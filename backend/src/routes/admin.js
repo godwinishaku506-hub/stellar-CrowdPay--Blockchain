@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const { reconcileSingleCampaign } = require('../services/reconciliation');
 const cache = require('../utils/cache');
 
@@ -433,9 +433,9 @@ router.get('/audit-log', async (req, res) => {
 
 /**
  * PATCH /api/admin/users/:id/promote
- * Promote a user to admin
+ * Promote a user to admin — only super-admins may do this.
  */
-router.patch('/users/:id/promote', async (req, res) => {
+router.patch('/users/:id/promote', requireSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -471,11 +471,17 @@ router.patch('/users/:id/promote', async (req, res) => {
 
 /**
  * PATCH /api/admin/users/:id/demote
- * Demote an admin to regular user
+ * Demote an admin to regular user — only super-admins may do this.
+ * Self-demotion is blocked. Demoting the last admin is blocked.
  */
-router.patch('/users/:id/demote', async (req, res) => {
+router.patch('/users/:id/demote', requireSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Block self-demotion
+    if (String(id) === String(req.user.userId)) {
+      return res.status(403).json({ error: 'You cannot demote yourself' });
+    }
 
     const { rows: userRows } = await db.query(
       'SELECT id, email, is_admin FROM users WHERE id = $1',
@@ -490,6 +496,16 @@ router.patch('/users/:id/demote', async (req, res) => {
 
     if (!user.is_admin) {
       return res.status(400).json({ error: 'User is not an admin' });
+    }
+
+    // Quorum guard: ensure at least one admin (besides the target) will remain
+    const { rows: adminCountRows } = await db.query(
+      `SELECT COUNT(*) FROM users WHERE is_admin = true AND id != $1`,
+      [id]
+    );
+    const remainingAdmins = parseInt(adminCountRows[0].count, 10);
+    if (remainingAdmins < 1) {
+      return res.status(409).json({ error: 'Cannot demote the last admin — the platform would be locked out' });
     }
 
     const { rows: updated } = await db.query(
