@@ -43,6 +43,7 @@ function buildAuthModule(overrides = {}) {
               wallet_type: 'custodial',
               kyc_status: 'approved',
               kyc_completed_at: new Date(),
+              token_version: 0,
             },
           ],
         };

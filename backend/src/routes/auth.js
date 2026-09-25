@@ -91,7 +91,7 @@ function getFrontendUrl() {
 
 function generateTokens(user) {
   const accessToken = jwt.sign(
-    { userId: user.id, role: user.role },
+    { userId: user.id, role: user.role, tv: user.token_version ?? 0 },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
   );
@@ -146,7 +146,7 @@ async function validateRefreshToken(token) {
   const { rows } = await db.query(
     `SELECT rt.id AS token_id, rt.user_id, rt.family_id, rt.revoked_at, rt.expires_at,
             u.id AS id, u.email, u.name, u.role, u.wallet_public_key, u.wallet_type,
-            u.kyc_status, u.kyc_completed_at
+            u.kyc_status, u.kyc_completed_at, u.token_version
      FROM refresh_tokens rt
      JOIN users u ON u.id = rt.user_id
      WHERE rt.token_hash = $1`,
@@ -699,10 +699,10 @@ router.post(
     const resetToken = rows[0];
     const passwordHash = await bcrypt.hash(password, 10);
 
-    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
-      passwordHash,
-      resetToken.user_id,
-    ]);
+    await db.query(
+      'UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 0) + 1 WHERE id = $2',
+      [passwordHash, resetToken.user_id]
+    );
     await db.query(
       'UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1',
       [resetToken.id]
@@ -713,7 +713,7 @@ router.post(
       [resetToken.user_id]
     );
 
-    res.json({ message: 'Password reset successfully' });
+    res.json({ message: 'Password reset successfully. All existing sessions have been invalidated.' });
   }
 );
 

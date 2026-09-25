@@ -212,7 +212,7 @@ test('POST /api/auth/reset-password updates password and revokes refresh tokens'
     .send({ token: 'raw-reset-token', password: 'Newpassword1' });
 
   assert.equal(res.status, 200);
-  assert.equal(res.body.message, 'Password reset successfully');
+  assert.match(res.body.message, /Password reset successfully/);
   assert.equal(updatedPassword, true);
   assert.equal(markedUsed, true);
   assert.equal(revokedRefresh, true);

@@ -34,15 +34,22 @@ async function authenticate(req) {
     req.user = payload;
     req.auth = { kind: 'jwt', scopes: null };
     
-    // Load admin status from database
+    // Load admin status and validate token_version from database
     if (req.user.userId) {
       const { rows } = await db.query(
-        'SELECT is_admin, is_banned FROM users WHERE id = $1',
+        'SELECT is_admin, is_banned, token_version FROM users WHERE id = $1',
         [req.user.userId]
       );
       if (rows.length) {
         req.user.is_admin = rows[0].is_admin;
         req.user.is_banned = rows[0].is_banned;
+
+        // Reject access tokens issued before the last password reset
+        const dbVersion = rows[0].token_version ?? 0;
+        const tokenVersion = payload.tv ?? 0;
+        if (tokenVersion < dbVersion) {
+          throw new Error('Token invalidated by password reset');
+        }
       }
     }
   } catch {
