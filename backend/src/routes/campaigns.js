@@ -1205,7 +1205,12 @@ router.post('/:id/members/accept', requireAuth, asyncHandler(async (req, res) =>
 }));
 
 // GET /campaigns/:id/analytics — campaign analytics
-router.get('/:id/analytics', asyncHandler(async (req, res) => {
+router.get('/:id/analytics', requireAuth, asyncHandler(async (req, res) => {
+  const { rows: owner } = await db.query('SELECT creator_id FROM campaigns WHERE id = $1', [req.params.id]);
+  if (!owner.length) return res.status(404).json({ error: 'Campaign not found' });
+  if (owner[0].creator_id !== req.user.userId && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Not authorized to view analytics' });
+  }
   const { rows: dailyTotals } = await db.query(`
     SELECT
       DATE(created_at) AS day,

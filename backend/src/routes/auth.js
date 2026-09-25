@@ -287,7 +287,11 @@ router.post('/register', registerLimiter, registerValidation, validateRequest, a
 
   if (walletType === 'freighter') {
     publicKey = req.body.wallet_public_key;
-    // wallet_public_key validated by middleware when wallet_type=freighter
+    try {
+      Keypair.fromPublicKey(publicKey);
+    } catch (_err) {
+      return res.status(400).json({ error: 'A valid wallet_public_key is required for Freighter registration' });
+    }
     encryptedSecret = null;
   } else {
     const keypair = Keypair.random();
