@@ -19,7 +19,7 @@ const {
 const {
   insertContributionSubmitted,
 } = require("../services/stellarTransactionService");
-const { sendEmail } = require("../services/emailService");
+const { sendEmailSafe } = require("../services/emailService");
 const { SLIPPAGE_BPS } = require("../config/constants");
 const {
   buildContributionIntent,
@@ -617,7 +617,7 @@ if (
     }
 
     if (parseAmountToStroops(campaign.raised_amount) + parseAmountToStroops(amount) >= parseAmountToStroops(campaign.target_amount)) {
-      sendEmail({
+      sendEmailSafe({
         to: campaign.creator_email,
         subject: `Target Reached for ${campaign.title}!`,
         text: `Congratulations! Your campaign "${campaign.title}" has reached its target of ${campaign.target_amount} ${campaign.asset_type}. You can now start the withdrawal process.`
