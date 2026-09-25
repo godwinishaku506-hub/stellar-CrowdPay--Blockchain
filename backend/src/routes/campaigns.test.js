@@ -359,3 +359,65 @@ test('GET /api/campaigns applies a distinct ORDER BY for every valid sort', asyn
   }
   assert.equal(seen.size, VALID_ORDER_BY.length, 'every sort must map to its own clause');
 });
+
+test('GET /api/campaigns/:id is read-only and does not mutate status', async () => {
+  let refreshCalled = false;
+  const app = buildApp({
+    queryImpl: async (text) => {
+      if (text.includes('SELECT *,')) {
+        return {
+          rows: [
+            {
+              id: 'c4a96b7d-6dc2-48ec-b12d-d602cb11b987',
+              creator_id: 'creator-1',
+              title: 'Read Only Test',
+              status: 'active',
+              target_amount: '100',
+              raised_amount: '50',
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    },
+    campaignStatusImpl: {
+      refreshCampaignStatus: async () => {
+        refreshCalled = true;
+        return { failed: null, funded: null };
+      },
+      refreshActiveCampaignStatuses: async () => ({ failed: [], funded: [] }),
+    },
+  });
+
+  const response = await request(app).get('/api/campaigns/c4a96b7d-6dc2-48ec-b12d-d602cb11b987');
+  assert.equal(response.status, 200);
+  assert.equal(refreshCalled, false, 'GET must never trigger refreshCampaignStatus write side-effects');
+});
+
+test('POST /api/campaigns/:id/refresh-status allows authorized creator or admin', async () => {
+  let refreshCalled = false;
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async (text) => {
+      if (text.includes('SELECT creator_id, status FROM campaigns')) {
+        return { rows: [{ creator_id: 'creator-1', status: 'active' }] };
+      }
+      if (text.includes('SELECT * FROM campaigns')) {
+        return { rows: [{ id: 'c4a96b7d-6dc2-48ec-b12d-d602cb11b987', status: 'funded' }] };
+      }
+      return { rows: [] };
+    },
+    campaignStatusImpl: {
+      refreshCampaignStatus: async () => {
+        refreshCalled = true;
+        return { funded: 'c4a96b7d-6dc2-48ec-b12d-d602cb11b987' };
+      },
+      refreshActiveCampaignStatuses: async () => ({ failed: [], funded: [] }),
+    },
+  });
+
+  const response = await request(app).post('/api/campaigns/c4a96b7d-6dc2-48ec-b12d-d602cb11b987/refresh-status');
+  assert.equal(response.status, 200);
+  assert.equal(refreshCalled, true, 'Authorized POST should refresh campaign status');
+});
+
