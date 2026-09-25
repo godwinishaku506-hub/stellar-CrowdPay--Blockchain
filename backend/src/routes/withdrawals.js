@@ -20,7 +20,7 @@ const {
   finalizeWithdrawalSubmitted,
   markWithdrawalFailed,
 } = require('../services/stellarTransactionService');
-const { sendEmail } = require('../services/emailService');
+const { sendEmailSafe } = require('../services/emailService');
 const { emitWebhookEventForUser, WEBHOOK_EVENTS } = require('../services/webhookDispatcher');
 const { withDecryptedWalletSecret } = require('../services/walletSecrets');
 const { createNotification } = require('../services/notifications');
@@ -541,7 +541,7 @@ const platformApproveHandler = async (req, res) => {
       [requestRow.campaign_id]
     );
     if (cRows.length) {
-      sendEmail({
+      sendEmailSafe({
         to: cRows[0].email,
         subject: 'Withdrawal Approved',
         text: `Your withdrawal for ${requestRow.amount} has been approved by the platform. Transaction Hash: ${txHash}`
@@ -721,7 +721,7 @@ router.post('/:id/reject', requireAuth, requirePlatformApprover, async (req, res
       [requestRow.campaign_id]
     );
     if (cRows.length) {
-      sendEmail({
+      sendEmailSafe({
         to: cRows[0].email,
         subject: 'Withdrawal Rejected',
         text: `Your withdrawal request has been rejected by the platform. Reason: ${reason}`

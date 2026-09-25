@@ -3,6 +3,7 @@ const { validateWalletSecretConfig } = require('../services/walletSecrets');
 const REQUIRED = [
   'DATABASE_URL',
   'JWT_SECRET',
+  'API_KEY_PEPPER',
   'PLATFORM_SECRET_KEY',
   'STELLAR_NETWORK',
   'STELLAR_HORIZON_URL',
