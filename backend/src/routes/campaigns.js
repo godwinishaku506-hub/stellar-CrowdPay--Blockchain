@@ -999,12 +999,13 @@ router.post('/:id/members', requireAuth, requireCampaignMember('owner'), asyncHa
   }
 
   const inviteToken = crypto.randomBytes(32).toString('hex');
+  const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
   const { rows: memberRows } = await db.query(
-    `INSERT INTO campaign_members (campaign_id, user_id, email, role, invited_by, invite_token)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO campaign_members (campaign_id, user_id, email, role, invited_by, invite_token, invite_expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id, campaign_id, email, role, created_at`,
-    [req.params.id, inviteeUserId, email.trim(), role, req.user.userId, inviteToken]
+    [req.params.id, inviteeUserId, email.trim(), role, req.user.userId, inviteToken, inviteExpiresAt]
   );
 
   const campaignUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${req.params.id}/invite/${inviteToken}`;
@@ -1107,7 +1108,7 @@ router.post('/:id/members/accept', requireAuth, asyncHandler(async (req, res) =>
   if (!inviteToken) return res.status(422).json({ error: 'Invitation token is required' });
 
   const { rows: invites } = await db.query(
-    `SELECT id, accepted_at, email FROM campaign_members
+    `SELECT id, accepted_at, email, invite_expires_at FROM campaign_members
      WHERE campaign_id = $1 AND invite_token = $2`,
     [req.params.id, inviteToken]
   );
@@ -1117,6 +1118,27 @@ router.post('/:id/members/accept', requireAuth, asyncHandler(async (req, res) =>
   }
   if (invites[0].accepted_at) {
     return res.status(409).json({ error: 'Invitation already accepted' });
+  }
+
+  // Check invite expiry
+  if (invites[0].invite_expires_at && new Date(invites[0].invite_expires_at) < new Date()) {
+    return res.status(410).json({ error: 'Invitation has expired' });
+  }
+
+  // Enforce identity binding: the accepting user must own the invited email address.
+  // Look up the current user's email from the DB — the JWT payload does not carry it.
+  const { rows: userRows } = await db.query(
+    'SELECT email FROM users WHERE id = $1',
+    [req.user.userId]
+  );
+  if (!userRows.length) {
+    return res.status(401).json({ error: 'Authenticated user not found' });
+  }
+  const currentUserEmail = userRows[0].email.toLowerCase().trim();
+  const invitedEmail = (invites[0].email || '').toLowerCase().trim();
+
+  if (!invitedEmail || currentUserEmail !== invitedEmail) {
+    return res.status(403).json({ error: 'This invitation was sent to a different email address' });
   }
 
   const { rows } = await db.query(
