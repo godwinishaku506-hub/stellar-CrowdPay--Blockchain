@@ -34,14 +34,18 @@ async function authenticate(req) {
     req.user = payload;
     req.auth = { kind: 'jwt', scopes: null };
     
-    // Load admin status from database
+    // Load admin status, role, and ban flag from database on every request.
+    // This ensures that role demotions, promotions and bans take effect
+    // immediately without waiting for token expiry (issue #18 and #19).
     if (req.user.userId) {
       const { rows } = await db.query(
-        'SELECT is_admin, is_banned FROM users WHERE id = $1',
+        'SELECT role, is_admin, is_super_admin, is_banned FROM users WHERE id = $1',
         [req.user.userId]
       );
       if (rows.length) {
+        req.user.role = rows[0].role;
         req.user.is_admin = rows[0].is_admin;
+        req.user.is_super_admin = rows[0].is_super_admin;
         req.user.is_banned = rows[0].is_banned;
       }
     }
@@ -53,6 +57,13 @@ async function authenticate(req) {
 function requireAdmin(req, res, next) {
   if (!req.user || !req.user.is_admin) {
     return res.status(403).json({ error: 'Requires admin privileges' });
+  }
+  next();
+}
+
+function requireSuperAdmin(req, res, next) {
+  if (!req.user || !req.user.is_super_admin) {
+    return res.status(403).json({ error: 'Requires super-admin privileges' });
   }
   next();
 }
@@ -139,5 +150,6 @@ module.exports = {
   assertApiKeyScopes,
   hashApiKey,
   requireAdmin,
+  requireSuperAdmin,
   requireRole,
 };
