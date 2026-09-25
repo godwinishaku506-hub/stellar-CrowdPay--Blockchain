@@ -110,11 +110,12 @@ export default function Register() {
         {t('register.subtitle')}
       </p>
       <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-        <input placeholder={t('register.fullName')} value={form.name} onChange={set('name')} required />
-        <input type="email" placeholder={t('register.email')} value={form.email} onChange={set('email')} required />
+        <input aria-label={t('register.fullName')} autoComplete="name" placeholder={t('register.fullName')} value={form.name} onChange={set('name')} required />
+        <input type="email" aria-label={t('register.email')} autoComplete="email" placeholder={t('register.email')} value={form.email} onChange={set('email')} required />
         <div style={{ position: 'relative' }}>
           <input
             id="reg-password"
+            aria-label={t('register.password')}
             type={showPassword ? 'text' : 'password'}
             placeholder={t('register.password')}
             value={form.password}
