@@ -46,6 +46,10 @@ function buildApp({
       requireRole: () => (req, _res, next) => {
         next();
       },
+      optionalAuth: (req, _res, next) => {
+        req.user = authUser || undefined;
+        next();
+      },
     },
   });
 

@@ -4,7 +4,7 @@ const rateLimit = require('express-rate-limit');
 const { Keypair, TransactionBuilder } = require('@stellar/stellar-sdk');
 const db = require('../config/database');
 const { networkPassphrase, isTestnet } = require('../config/stellar');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 const logger = require('../config/logger');
 const { sendAlert } = require('../services/alerting');
 const { contributionValidation, contributionQuoteValidation, validateRequest } = require('../middleware/validation');
@@ -37,6 +37,16 @@ const isTest = process.env.NODE_ENV === 'test';
 const contributionPostLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: isTest ? 100000 : 5,
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTest,
+});
+
+// Rate limiter for public read-only contribution listings
+const publicContributionReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: isTest ? 100000 : 60,
   message: { error: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -152,10 +162,30 @@ router.get('/mine', requireAuth, asyncHandler(async (req, res) => {
   res.json(rows);
 }));
 
-// Get contributions for a campaign
-router.get('/campaign/:campaignId', async (req, res) => {
+// Get contributions for a campaign (public endpoint — sensitive fields are redacted for unauthenticated/unauthorised callers)
+router.get('/campaign/:campaignId', publicContributionReadLimiter, optionalAuth, async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
   const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+
+  // Determine if the requester has elevated privileges (admin or campaign organizer)
+  const requestUserId = req.user?.userId;
+  const isAdmin = req.user?.is_admin === true;
+  let isPrivileged = isAdmin;
+
+  if (!isPrivileged && requestUserId) {
+    const { rows: campaignRows } = await db.query(
+      `SELECT creator_id FROM campaigns WHERE id = $1`,
+      [req.params.campaignId]
+    );
+    if (campaignRows.length) {
+      const isCreator = campaignRows[0].creator_id === requestUserId;
+      const { rows: memberRows } = await db.query(
+        `SELECT 1 FROM campaign_members WHERE campaign_id = $1 AND user_id = $2 AND accepted_at IS NOT NULL`,
+        [req.params.campaignId, requestUserId]
+      );
+      isPrivileged = isCreator || memberRows.length > 0;
+    }
+  }
 
   const { rows } = await db.query(
     `SELECT c.id, c.sender_public_key, c.amount, c.asset, c.payment_type,
@@ -179,7 +209,12 @@ router.get('/campaign/:campaignId', async (req, res) => {
   );
 
   const total = rows[0]?.total_count ?? 0;
-  const cleanedRows = rows.map(({ total_count, ...rest }) => rest);
+  const cleanedRows = rows.map(({ total_count, ...rest }) => {
+    if (isPrivileged) return rest;
+    // Redact sender identity and refund details from public view
+    const { sender_public_key: _spk, refund_status: _rs, refund_tx_hash: _rth, ...publicRow } = rest;
+    return publicRow;
+  });
   res.json({ contributions: cleanedRows, total: Number(total), limit, offset });
 });
 

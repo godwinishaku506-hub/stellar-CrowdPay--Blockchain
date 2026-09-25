@@ -71,6 +71,7 @@ function buildAuthModule(overrides = {}) {
     '../config/logger': { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
     '../middleware/validation': {
       validateRequest: (req, res, next) => next(),
+      validateRequestAsError: (req, res, next) => next(),
       registerValidation: [],
       loginValidation: [],
       forgotPasswordValidation: [],
@@ -79,7 +80,7 @@ function buildAuthModule(overrides = {}) {
     '../services/stellarService': {
       ensureCustodialAccountFundedAndTrusted: async () => {},
     },
-    '../services/kycService': {
+    '../services/kycProvider': {
       isKycRequiredForCampaigns: () => false,
     },
     '../services/emailService': {

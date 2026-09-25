@@ -133,8 +133,24 @@ function requireAuth(req, res, next) {
     });
 }
 
+/**
+ * Middleware that attempts authentication but does not reject unauthenticated requests.
+ * Sets req.user if a valid token is present; leaves req.user undefined otherwise.
+ */
+function optionalAuth(req, res, next) {
+  authenticate(req)
+    .then(() => {
+      next();
+    })
+    .catch(() => {
+      // No token or invalid token — continue as anonymous
+      next();
+    });
+}
+
 module.exports = {
   requireAuth,
+  optionalAuth,
   authenticate,
   assertApiKeyScopes,
   hashApiKey,
