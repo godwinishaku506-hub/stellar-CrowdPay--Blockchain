@@ -14,7 +14,7 @@ const { emitWebhookEventForUser, WEBHOOK_EVENTS } = require('../services/webhook
 const { refreshCampaignStatus, refreshActiveCampaignStatuses } = require('../services/campaignStatusService');
 const { queueFailedCampaignRefunds } = require('../services/campaignStatusActions');
 const { provisionCampaignContracts } = require('../services/sorobanService');
-const { sendEmail } = require('../services/emailService');
+const { sendEmailSafe } = require('../services/emailService');
 const { uploadCampaignCoverImage } = require('../services/storage');
 const { isKycRequiredForCampaigns } = require('../services/kycProvider');
 const { listCreatorCampaigns } = require('../services/userDashboardService');
@@ -140,7 +140,7 @@ const publicReadLimiter = rateLimit({
 });
 
 function normalizeMilestonesInput(input) {
-  if (input == null) return [];
+  if (input == null) return []; // eslint-disable-line eqeqeq
   if (!Array.isArray(input)) {
     throw new Error('milestones must be an array');
   }
@@ -673,7 +673,7 @@ router.post('/cron/reminders', requireAuth, requireRole('admin'), asyncHandler(a
   );
 
   for (const campaign of rows) {
-    sendEmail({
+    sendEmailSafe({
       to: campaign.creator_email,
       subject: `Reminder: Campaign "${campaign.title}" ends in 48 hours`,
       text: `Your campaign "${campaign.title}" is approaching its deadline on ${new Date(campaign.deadline).toDateString()}. 
@@ -1061,7 +1061,7 @@ router.post('/:id/members', requireAuth, requireCampaignMember('owner'), asyncHa
 
   const campaignUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${req.params.id}/invite/${inviteToken}`;
   try {
-    await sendEmail({
+    await sendEmailSafe({
       to: email.trim(),
       subject: `Invitation to join campaign team`,
       text: `You have been invited to join a campaign as a ${role}. Click here to accept: ${campaignUrl}`,

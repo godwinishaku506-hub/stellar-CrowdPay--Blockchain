@@ -18,6 +18,10 @@ const { withDecryptedWalletSecret } = require('../services/walletSecrets');
 const { emitWebhookEventForUser, WEBHOOK_EVENTS } = require('../services/webhookDispatcher');
 const { invokeContract, nativeToScVal } = require('../services/sorobanService');
 const crypto = require('crypto');
+const {
+  parseAmountToStroops,
+  formatStroops,
+} = require('../utils/amounts');
 
 function canPerformPlatformSignature(userId) {
   if (!process.env.PLATFORM_APPROVER_USER_ID) return false;
@@ -33,8 +37,24 @@ function validatePublicKey(publicKey) {
   }
 }
 
+/**
+ * Compute the payout amount for a milestone release using integer stroop math.
+ *
+ * Avoids float drift by working in BigInt stroops throughout.
+ * percentage is scaled by 1e6 to preserve up to 6 fractional digits before
+ * doing the integer division, so fee + net always reconstitutes exactly.
+ *
+ * @param {string|number} raisedAmount      Raised amount decimal string (Stellar)
+ * @param {string|number} releasePercentage Percentage 0–100 (e.g. 25, 33.333)
+ * @returns {string}  Normalized decimal string, at most 7 decimal places
+ */
 function toReleaseAmount(raisedAmount, releasePercentage) {
-  return ((Number(raisedAmount) * Number(releasePercentage)) / 100).toFixed(7);
+  const raisedStroops = parseAmountToStroops(raisedAmount);
+  // Scale percentage to integer (up to 6 decimal places → multiply by 1_000_000).
+  const scaledPct = BigInt(Math.round(Number(releasePercentage) * 1_000_000));
+  // releasedStroops = raisedStroops * (pct / 100) → divide by 100_000_000n (100 * 1_000_000).
+  const releasedStroops = (raisedStroops * scaledPct) / 100_000_000n;
+  return formatStroops(releasedStroops);
 }
 
 const MILESTONE_LIMIT = 5;

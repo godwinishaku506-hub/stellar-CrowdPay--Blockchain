@@ -7,7 +7,7 @@ const { Keypair } = require('@stellar/stellar-sdk');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const { ensureCustodialAccountFundedAndTrusted } = require('../services/stellarService');
-const { sendEmail } = require('../services/emailService');
+const { sendEmail, sendEmailSafe } = require('../services/emailService');
 const { requireAuth } = require('../middleware/auth');
 const { encryptWalletSecret } = require('../services/walletSecrets');
 const { isKycRequiredForCampaigns } = require('../services/kycProvider');
@@ -333,8 +333,7 @@ router.post('/register', registerLimiter, registerValidation, validateRequest, a
       });
     }
 
-    const verifyUrl = `${getFrontendUrl()}/verify-email?token=${verificationToken}`;
-    Promise.resolve(sendEmail({
+    sendEmailSafe({
       to: normalizedEmail,
       subject: 'Verify your CrowdPay email address',
       text: `Welcome to CrowdPay, ${normalizedName}!\n\nPlease verify your email address by opening this link:\n\n${verifyUrl}\n\nThis link is valid for 24 hours.\n\nIf you did not create this account, you can ignore this email.`,
@@ -660,7 +659,7 @@ router.post(
       );
 
       const resetUrl = `${getFrontendUrl()}/reset-password?token=${rawToken}`;
-      sendEmail({
+      sendEmailSafe({
         to: user.email,
         subject: 'Reset your CrowdPay password',
         text: `You requested a password reset. Open this link within 1 hour to choose a new password:\n\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,

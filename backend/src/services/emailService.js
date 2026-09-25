@@ -52,6 +52,33 @@ async function sendEmail({ to, subject, text, html }) {
   }
 }
 
+/**
+ * Fire-and-forget wrapper around sendEmail.
+ *
+ * Never throws — email failures are logged but do not propagate to callers.
+ * Use this at every call site where email is a non-critical side-effect so
+ * that an SMTP blip cannot cause unhandled promise rejections or crash the
+ * process.
+ *
+ * @param {object} opts  Same options as sendEmail ({ to, subject, text, html })
+ * @returns {Promise<void>}  Always resolves; errors are swallowed after logging.
+ */
+async function sendEmailSafe(opts) {
+  try {
+    await sendEmail(opts);
+  } catch (error) {
+    // Already logged inside sendEmail; log a secondary alert here with context.
+    console.error(
+      '[Email Service] sendEmailSafe swallowed error — email was NOT delivered.',
+      {
+        to: opts?.to,
+        subject: opts?.subject,
+        message: error?.message,
+      },
+    );
+  }
+}
+
 function getStellarExpertTxUrl(txHash) {
   const network = process.env.STELLAR_NETWORK || "testnet";
   return `https://stellar.expert/explorer/${network}/tx/${txHash}`;
@@ -110,5 +137,6 @@ async function sendContributionReceipt({
 
 module.exports = {
   sendEmail,
+  sendEmailSafe,
   sendContributionReceipt,
 };
