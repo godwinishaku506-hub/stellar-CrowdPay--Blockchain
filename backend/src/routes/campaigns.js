@@ -754,11 +754,18 @@ router.post('/', requireAuth, requireRole('creator', 'admin'), createCampaignVal
 
   // Get creator's info
   const { rows: userRows } = await db.query(
-    'SELECT email, wallet_public_key, kyc_status FROM users WHERE id = $1',
+    'SELECT email, wallet_public_key, kyc_status, email_verified FROM users WHERE id = $1',
     [req.user.userId]
   );
   if (!userRows.length) return res.status(404).json({ error: 'User not found' });
-  
+
+  if (!userRows[0].email_verified) {
+    return res.status(403).json({
+      error: 'You must verify your email address before creating a campaign.',
+      code: 'EMAIL_NOT_VERIFIED',
+    });
+  }
+
   if (isKycRequiredForCampaigns() && userRows[0].kyc_status !== 'verified') {
     return res.status(403).json({
       error: 'Verify your identity before creating a campaign.',

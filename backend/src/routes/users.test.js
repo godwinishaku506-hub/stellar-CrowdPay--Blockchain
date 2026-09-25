@@ -31,6 +31,9 @@ function buildApp({ queryImpl, stellarImpl, sendEmailImpl, bcryptImpl } = {}) {
       encryptWalletSecret: async (secret) => `cpws:v1:${secret.slice(0, 8)}`,
     },
     '../services/emailService': { sendEmail },
+    '../services/kycProvider': {
+      isKycRequiredForCampaigns: () => false,
+    },
     '../middleware/auth': {
       requireAuth: (_req, _res, next) => next(),
     },

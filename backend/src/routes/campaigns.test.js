@@ -153,8 +153,8 @@ test('POST /api/campaigns blocks unverified creators when KYC gate is enabled', 
   const app = buildApp({
     authUser: { userId: 'creator-1', role: 'creator' },
     queryImpl: async (text) => {
-      if (text.includes('SELECT email, wallet_public_key, kyc_status FROM users')) {
-        return { rows: [{ wallet_public_key: 'GCREATOR', kyc_status: 'pending' }] };
+      if (text.includes('SELECT email, wallet_public_key, kyc_status, email_verified FROM users')) {
+        return { rows: [{ wallet_public_key: 'GCREATOR', kyc_status: 'pending', email_verified: true }] };
       }
       return { rows: [] };
     },
@@ -182,8 +182,8 @@ test('POST /api/campaigns allows creation when KYC gate is disabled', async (t) 
   const app = buildApp({
     authUser: { userId: 'creator-1', role: 'creator' },
     queryImpl: async (text) => {
-      if (text.includes('SELECT email, wallet_public_key, kyc_status FROM users')) {
-        return { rows: [{ wallet_public_key: 'GCREATOR', kyc_status: 'unverified' }] };
+      if (text.includes('SELECT email, wallet_public_key, kyc_status, email_verified FROM users')) {
+        return { rows: [{ wallet_public_key: 'GCREATOR', kyc_status: 'unverified', email_verified: true }] };
       }
       if (text.includes('INSERT INTO campaigns')) {
         return {
@@ -217,8 +217,8 @@ test('POST /api/campaigns returns 500 and logs orphaned wallet when DB insert fa
   const app = buildApp({
     authUser: { userId: 'creator-1', role: 'creator' },
     queryImpl: async (text) => {
-      if (text.includes('SELECT email, wallet_public_key, kyc_status FROM users')) {
-        return { rows: [{ email: 'creator@test.com', wallet_public_key: 'GCREATOR', kyc_status: 'verified' }] };
+      if (text.includes('SELECT email, wallet_public_key, kyc_status, email_verified FROM users')) {
+        return { rows: [{ email: 'creator@test.com', wallet_public_key: 'GCREATOR', kyc_status: 'verified', email_verified: true }] };
       }
       if (text === 'BEGIN' || text === 'ROLLBACK') return { rows: [] };
       if (text.includes('INSERT INTO campaigns')) {
