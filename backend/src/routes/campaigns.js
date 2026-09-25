@@ -127,7 +127,7 @@ const MILESTONE_PERCENT_SCALE = 10000;
 const MILESTONE_LIMIT = 5;
 
 function normalizeMilestonesInput(input) {
-  if (input == null) return [];
+  if (input == null) return []; // eslint-disable-line eqeqeq
   if (!Array.isArray(input)) {
     throw new Error('milestones must be an array');
   }
