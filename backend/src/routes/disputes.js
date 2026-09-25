@@ -184,7 +184,7 @@ router.patch('/disputes/:id', requireAuth, requireRole('admin'), async (req, res
           `INSERT INTO withdrawal_requests
              (campaign_id, requested_by, amount, destination_key, unsigned_xdr,
               creator_signed, platform_signed, contribution_id, is_refund, dispute_id)
-           VALUES ($1, $2, $3, $4, $5, FALSE, FALSE, $6, TRUE, $7)
+           VALUES ($1, $2, $3, $4, $5, TRUE, FALSE, $6, TRUE, $7)
            RETURNING id`,
           [
             dispute.campaign_id, req.user.userId, contribution.amount,
