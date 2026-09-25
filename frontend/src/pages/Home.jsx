@@ -16,12 +16,9 @@ const STATUS_OPTIONS = ['', 'active', 'funded', 'closed', 'failed'];
 const ASSET_OPTIONS = ['', 'USDC', 'XLM'];
 const SORT_OPTIONS = [
   { value: 'newest', key: 'home.newest' },
+  { value: 'trending', key: 'home.trending' },
   { value: 'most_funded', key: 'home.mostFunded' },
   { value: 'closest_to_goal', key: 'home.closestToGoal' },
-  { value: 'newest', label: 'Newest' },
-  { value: 'trending', label: 'Trending' },
-  { value: 'funded', label: 'Most funded' },
-  { value: 'closest_to_goal', label: 'Closest to goal' },
 ];
 const CATEGORY_LABELS = {
   technology: 'Technology',
@@ -310,18 +307,14 @@ export default function Home() {
       <h2 style={styles.sectionTitle}>Active campaigns</h2>
 
       <div style={styles.sortBar}>
-        {[
-          { value: 'newest',   label: 'Newest' },
-          { value: 'trending', label: '🔥 Trending' },
-          { value: 'funded',   label: 'Most funded' },
-        ].map((opt) => (
+        {SORT_OPTIONS.map((opt) => (
           <button
             key={opt.value}
             type="button"
             className={sort === opt.value ? 'pill-active' : 'pill'}
             onClick={() => handleSortChange(opt.value)}
           >
-            {opt.label}
+            {t(opt.key)}
           </button>
         ))}
       </div>
