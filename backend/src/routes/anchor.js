@@ -15,6 +15,7 @@ const {
   getAnchorTransaction,
   isAnchorFailureStatus,
 } = require('../services/anchorService');
+const { parseAmountToStroops, formatStroops } = require('../utils/amounts');
 
 function mapSessionForClient(row) {
   const session = {
@@ -154,7 +155,7 @@ router.post('/deposits/start', requireAuth, async (req, res) => {
           sendAsset: anchor.assetCode,
           contributorPublicKey: user.wallet_public_key,
         });
-        const anchorAmount = intent.kind === 'payment' ? String(amount) : intent.sendMax;
+        const anchorAmount = intent.kind === 'payment' ? formatStroops(parseAmountToStroops(amount)) : intent.sendMax;
         const interactive = await startInteractiveDeposit({
           anchor,
           authToken: auth.token,
@@ -177,7 +178,7 @@ router.post('/deposits/start', requireAuth, async (req, res) => {
             anchor.assetCode,
             anchorAmount,
             campaign.asset_type,
-            String(amount),
+            formatStroops(parseAmountToStroops(amount)),
             JSON.stringify(intent),
             JSON.stringify(intent.conversionQuote),
             interactive.url,
@@ -268,7 +269,7 @@ router.post('/sep24/deposit', requireAuth, async (req, res) => {
           anchor,
           authToken: auth.token,
           userPublicKey: user.wallet_public_key,
-          amount: String(amount),
+          amount: formatStroops(parseAmountToStroops(amount)),
         });
 
         const { rows } = await db.query(
@@ -282,7 +283,7 @@ router.post('/sep24/deposit', requireAuth, async (req, res) => {
             anchor.id,
             interactive.id,
             anchor.assetCode,
-            String(amount),
+            formatStroops(parseAmountToStroops(amount)),
             interactive.url,
             auth.token,
             auth.expiresAt,

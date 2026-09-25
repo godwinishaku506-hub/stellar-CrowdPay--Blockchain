@@ -303,15 +303,16 @@ router.get('/quote', requireAuth, contributionQuoteValidation, validateRequest, 
   }
 
   const bestPath = paths[0];
-  const maxSendWithSlippage = (
-    parseFloat(bestPath.source_amount) *
-    (1 + SLIPPAGE_BPS / 10000)
-  ).toFixed(7);
+  // Apply slippage in integer stroop math to avoid float drift on the sendMax.
+  const sourceStroops = parseAmountToStroops(bestPath.source_amount);
+  const maxSendWithSlippage = formatStroops(
+    (sourceStroops * BigInt(10000 + SLIPPAGE_BPS)) / 10000n
+  );
 
   res.json({
     send_asset,
     dest_asset,
-    dest_amount: String(dest_amount),
+    dest_amount: formatStroops(parseAmountToStroops(dest_amount)),
     quoted_source_amount: bestPath.source_amount,
     max_send_amount: maxSendWithSlippage,
     estimated_rate: (
