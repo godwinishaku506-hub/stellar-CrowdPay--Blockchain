@@ -1,8 +1,9 @@
 const router = require('express').Router();
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, optionalAuth } = require('../middleware/auth');
 const {
   createCampaignWallet,
   getCampaignBalance,
@@ -125,6 +126,18 @@ const upload = multer({
 const SUPPORTED_ASSETS = getSupportedAssetCodes();
 const MILESTONE_PERCENT_SCALE = 10000;
 const MILESTONE_LIMIT = 5;
+
+const isTest = process.env.NODE_ENV === 'test';
+
+// Rate limiter for public read-only endpoints (backers, etc.)
+const publicReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: isTest ? 100000 : 60,
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTest,
+});
 
 function normalizeMilestonesInput(input) {
   if (input == null) return []; // eslint-disable-line eqeqeq
@@ -486,25 +499,57 @@ router.get('/:id/embed', asyncHandler(async (req, res) => {
 }));
 
 // Get backers for a campaign
-router.get('/:id/backers', asyncHandler(async (req, res) => {
+router.get('/:id/backers', publicReadLimiter, optionalAuth, asyncHandler(async (req, res) => {
   const campaignId = req.params.id;
-  const { rows: campaignRows } = await db.query('SELECT show_backer_amounts FROM campaigns WHERE id = $1', [campaignId]);
+  const { rows: campaignRows } = await db.query(
+    'SELECT show_backer_amounts, creator_id FROM campaigns WHERE id = $1',
+    [campaignId]
+  );
   if (!campaignRows.length) return res.status(404).json({ error: 'Campaign not found' });
-  const { show_backer_amounts } = campaignRows[0];
+  const { show_backer_amounts, creator_id } = campaignRows[0];
 
-  const query = `
-    SELECT 
-      display_name,
-      sender_public_key,
-      ${show_backer_amounts ? 'amount,' : ''}
-      asset,
-      created_at
-    FROM contributions
-    WHERE campaign_id = $1
-    ORDER BY created_at DESC
-  `;
-  const { rows } = await db.query(query, [campaignId]);
-  res.json(rows);
+  // Determine if the requester is privileged (admin or campaign organizer)
+  const requestUserId = req.user?.userId;
+  const isAdmin = req.user?.is_admin === true;
+  const isOrganizer = requestUserId && (
+    requestUserId === creator_id ||
+    (await db.query(
+      `SELECT 1 FROM campaign_members WHERE campaign_id = $1 AND user_id = $2 AND accepted_at IS NOT NULL`,
+      [campaignId, requestUserId]
+    )).rows.length > 0
+  );
+  const isPrivileged = isAdmin || isOrganizer;
+
+  const { rows } = await db.query(
+    `SELECT
+       display_name,
+       sender_public_key,
+       ${show_backer_amounts ? 'amount,' : ''}
+       asset,
+       created_at,
+       wr.status AS refund_status,
+       wr.tx_hash AS refund_tx_hash
+     FROM contributions c
+     LEFT JOIN LATERAL (
+       SELECT status, tx_hash
+       FROM withdrawal_requests
+       WHERE contribution_id = c.id
+       ORDER BY created_at DESC
+       LIMIT 1
+     ) wr ON TRUE
+     WHERE c.campaign_id = $1
+     ORDER BY c.created_at DESC`,
+    [campaignId]
+  );
+
+  // Redact sensitive fields for non-privileged callers
+  const responseRows = rows.map((row) => {
+    if (isPrivileged) return row;
+    const { sender_public_key: _spk, refund_status: _rs, refund_tx_hash: _rth, ...publicRow } = row;
+    return publicRow;
+  });
+
+  res.json(responseRows);
 }));
 
 // SSE stream for real-time campaign funding updates
@@ -709,11 +754,18 @@ router.post('/', requireAuth, requireRole('creator', 'admin'), createCampaignVal
 
   // Get creator's info
   const { rows: userRows } = await db.query(
-    'SELECT email, wallet_public_key, kyc_status FROM users WHERE id = $1',
+    'SELECT email, wallet_public_key, kyc_status, email_verified FROM users WHERE id = $1',
     [req.user.userId]
   );
   if (!userRows.length) return res.status(404).json({ error: 'User not found' });
-  
+
+  if (!userRows[0].email_verified) {
+    return res.status(403).json({
+      error: 'You must verify your email address before creating a campaign.',
+      code: 'EMAIL_NOT_VERIFIED',
+    });
+  }
+
   if (isKycRequiredForCampaigns() && userRows[0].kyc_status !== 'verified') {
     return res.status(403).json({
       error: 'Verify your identity before creating a campaign.',
