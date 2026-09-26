@@ -323,7 +323,7 @@ async function queueFailedCampaignRefunds(campaignId, actorUserId) {
         `INSERT INTO withdrawal_requests
            (campaign_id, requested_by, amount, destination_key, unsigned_xdr,
             creator_signed, platform_signed, contribution_id, is_refund)
-         VALUES ($1, $2, $3, $4, $5, FALSE, FALSE, $6, TRUE)
+         VALUES ($1, $2, $3, $4, $5, TRUE, FALSE, $6, TRUE)
          RETURNING id`,
         [
           campaignId,

@@ -149,9 +149,11 @@ function assertApiKeyScopes(req, res) {
 function requireAuth(req, res, next) {
   authenticate(req)
     .then(() => {
-      // Enforce ban server-side on every request regardless of token validity.
-      // is_banned is re-read from DB in authenticate() so bans take effect immediately.
-      if (req.user?.is_banned) {
+      // #15 — Enforce the banned flag. is_banned is re-read from DB in
+      // authenticate() so bans take effect immediately on every request.
+      // Admins are exempt so that platform staff can still access the system
+      // to investigate and manage banned accounts.
+      if (req.user?.is_banned && !req.user?.is_admin) {
         return res.status(403).json({ error: 'Your account has been suspended' });
       }
       if (!assertApiKeyScopes(req, res)) return;

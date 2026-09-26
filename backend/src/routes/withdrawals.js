@@ -391,7 +391,10 @@ const platformApproveHandler = async (req, res) => {
   if (requestRow.status !== 'pending') {
     return res.status(409).json({ error: 'Withdrawal request is no longer pending' });
   }
-  if (!requestRow.creator_signed) {
+  // #16 — For platform-initiated refunds (failed campaigns and dispute resolutions)
+  // creator_signed is pre-set to TRUE at creation time, so this guard only applies
+  // to voluntary creator-initiated withdrawals where the creator must sign first.
+  if (!requestRow.is_refund && !requestRow.creator_signed) {
     return res.status(409).json({ error: 'Creator approval is required before platform approval' });
   }
   if (requestRow.platform_signed) {
