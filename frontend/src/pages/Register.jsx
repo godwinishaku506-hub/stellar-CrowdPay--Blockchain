@@ -54,6 +54,10 @@ export default function Register() {
       setError(t('register.passwordsMismatch'));
       return;
     }
+    if (usingFreighter && !freighterPublicKey) {
+      setError(t('register.connectFreighter'));
+      return;
+    }
     setLoading(true);
     setError('');
     try {
