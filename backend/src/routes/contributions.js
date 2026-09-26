@@ -4,7 +4,7 @@ const rateLimit = require('express-rate-limit');
 const { Keypair, TransactionBuilder } = require('@stellar/stellar-sdk');
 const db = require('../config/database');
 const { networkPassphrase, isTestnet } = require('../config/stellar');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 const logger = require('../config/logger');
 const { sendAlert } = require('../services/alerting');
 const { contributionValidation, contributionQuoteValidation, validateRequest } = require('../middleware/validation');
@@ -19,7 +19,7 @@ const {
 const {
   insertContributionSubmitted,
 } = require("../services/stellarTransactionService");
-const { sendEmail } = require("../services/emailService");
+const { sendEmailSafe } = require("../services/emailService");
 const { SLIPPAGE_BPS } = require("../config/constants");
 const {
   buildContributionIntent,
@@ -28,6 +28,7 @@ const {
 } = require('../services/contributionService');
 const { listUserContributions } = require('../services/userDashboardService');
 const asyncHandler = require('../utils/asyncHandler');
+const { parseAmountToStroops, formatStroops } = require('../utils/amounts');
 
 const SUPPORTED_ASSETS = getSupportedAssetCodes();
 const PREPARED_CONTRIBUTION_EXPIRES_IN = '10m';
@@ -37,6 +38,44 @@ const contributionPostLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: isTest ? 100000 : 5,
   message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTest,
+});
+
+// Rate limiter for public read-only contribution listings
+const publicContributionReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: isTest ? 100000 : 60,
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTest,
+});
+
+const prepareLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: isTest ? 100000 : 10,
+  keyGenerator: (req) => {
+    const userId = req.user?.userId || req.user?.id;
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+    return userId ? `${userId}_${ip}` : String(ip);
+  },
+  message: { error: 'Too many prepare requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTest,
+});
+
+const submitSignedLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: isTest ? 100000 : 10,
+  keyGenerator: (req) => {
+    const userId = req.user?.userId || req.user?.id || req.ip;
+    const prepareToken = req.body?.prepare_token || '';
+    return prepareToken ? `${userId}_${prepareToken}` : `${userId}_${req.ip}`;
+  },
+  message: { error: 'Too many submission requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
   skip: () => isTest,
@@ -123,10 +162,30 @@ router.get('/mine', requireAuth, asyncHandler(async (req, res) => {
   res.json(rows);
 }));
 
-// Get contributions for a campaign
-router.get('/campaign/:campaignId', async (req, res) => {
+// Get contributions for a campaign (public endpoint — sensitive fields are redacted for unauthenticated/unauthorised callers)
+router.get('/campaign/:campaignId', publicContributionReadLimiter, optionalAuth, async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
   const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+
+  // Determine if the requester has elevated privileges (admin or campaign organizer)
+  const requestUserId = req.user?.userId;
+  const isAdmin = req.user?.is_admin === true;
+  let isPrivileged = isAdmin;
+
+  if (!isPrivileged && requestUserId) {
+    const { rows: campaignRows } = await db.query(
+      `SELECT creator_id FROM campaigns WHERE id = $1`,
+      [req.params.campaignId]
+    );
+    if (campaignRows.length) {
+      const isCreator = campaignRows[0].creator_id === requestUserId;
+      const { rows: memberRows } = await db.query(
+        `SELECT 1 FROM campaign_members WHERE campaign_id = $1 AND user_id = $2 AND accepted_at IS NOT NULL`,
+        [req.params.campaignId, requestUserId]
+      );
+      isPrivileged = isCreator || memberRows.length > 0;
+    }
+  }
 
   const { rows } = await db.query(
     `SELECT c.id, c.sender_public_key, c.amount, c.asset, c.payment_type,
@@ -150,7 +209,12 @@ router.get('/campaign/:campaignId', async (req, res) => {
   );
 
   const total = rows[0]?.total_count ?? 0;
-  const cleanedRows = rows.map(({ total_count, ...rest }) => rest);
+  const cleanedRows = rows.map(({ total_count, ...rest }) => {
+    if (isPrivileged) return rest;
+    // Redact sender identity and refund details from public view
+    const { sender_public_key: _spk, refund_status: _rs, refund_tx_hash: _rth, ...publicRow } = rest;
+    return publicRow;
+  });
   res.json({ contributions: cleanedRows, total: Number(total), limit, offset });
 });
 
@@ -274,15 +338,16 @@ router.get('/quote', requireAuth, contributionQuoteValidation, validateRequest, 
   }
 
   const bestPath = paths[0];
-  const maxSendWithSlippage = (
-    parseFloat(bestPath.source_amount) *
-    (1 + SLIPPAGE_BPS / 10000)
-  ).toFixed(7);
+  // Apply slippage in integer stroop math to avoid float drift on the sendMax.
+  const sourceStroops = parseAmountToStroops(bestPath.source_amount);
+  const maxSendWithSlippage = formatStroops(
+    (sourceStroops * BigInt(10000 + SLIPPAGE_BPS)) / 10000n
+  );
 
   res.json({
     send_asset,
     dest_asset,
-    dest_amount: String(dest_amount),
+    dest_amount: formatStroops(parseAmountToStroops(dest_amount)),
     quoted_source_amount: bestPath.source_amount,
     max_send_amount: maxSendWithSlippage,
     estimated_rate: (
@@ -293,7 +358,7 @@ router.get('/quote', requireAuth, contributionQuoteValidation, validateRequest, 
   });
 }));
 
-router.post('/prepare', requireAuth, contributionValidation, validateRequest, asyncHandler(async (req, res) => {
+router.post('/prepare', requireAuth, prepareLimiter, contributionValidation, validateRequest, asyncHandler(async (req, res) => {
   const { campaign_id, amount, send_asset, sender_public_key, display_name } = req.body;
   if (!sender_public_key) {
     return res.status(422).json({
@@ -317,7 +382,7 @@ router.post('/prepare', requireAuth, contributionValidation, validateRequest, as
   const campaign = await loadActiveCampaign(campaign_id);
   if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
 
-  if (campaign.min_contribution && parseFloat(amount) < parseFloat(campaign.min_contribution)) {
+  if (campaign.min_contribution && parseAmountToStroops(amount) < parseAmountToStroops(campaign.min_contribution)) {
     return res.status(400).json({ error: `Contribution amount is below the minimum limit of ${campaign.min_contribution} ${campaign.asset_type}` });
   }
 
@@ -326,8 +391,8 @@ router.post('/prepare', requireAuth, contributionValidation, validateRequest, as
       'SELECT COALESCE(SUM(amount), 0) as total FROM contributions WHERE campaign_id = $1 AND sender_public_key = $2',
       [campaign_id, sender_public_key]
     );
-    const totalExisting = parseFloat(sumRows[0].total);
-    if (totalExisting + parseFloat(amount) > parseFloat(campaign.max_contribution)) {
+    const totalExisting = parseAmountToStroops(sumRows[0].total);
+    if (totalExisting + parseAmountToStroops(amount) > parseAmountToStroops(campaign.max_contribution)) {
       return res.status(400).json({ error: `Contribution violates the maximum limit of ${campaign.max_contribution} ${campaign.asset_type} per backer` });
     }
   }
@@ -389,7 +454,7 @@ router.post('/prepare', requireAuth, contributionValidation, validateRequest, as
   }
 }));
 
-router.post('/submit-signed', requireAuth, asyncHandler(async (req, res) => {
+router.post('/submit-signed', requireAuth, submitSignedLimiter, asyncHandler(async (req, res) => {
   const { signed_xdr, prepare_token } = req.body;
   if (!signed_xdr || !prepare_token) {
     return res.status(400).json({ error: 'signed_xdr and prepare_token are required' });
@@ -510,33 +575,33 @@ router.post(
     );
     const contributorPublicKey = users[0].wallet_public_key;
 
-    if (
-      campaign.min_contribution &&
-      parseFloat(amount) < parseFloat(campaign.min_contribution)
-    ) {
+if (
+    campaign.min_contribution &&
+    parseAmountToStroops(amount) < parseAmountToStroops(campaign.min_contribution)
+  ) {
+    return res.status(400).json({
+      error: `Minimum contribution is ${campaign.min_contribution} ${campaign.asset_type}`,
+    });
+  }
+
+  if (campaign.max_contribution && parseAmountToStroops(amount) > parseAmountToStroops(campaign.max_contribution)) {
+    return res.status(400).json({
+      error: `Maximum contribution is ${campaign.max_contribution} ${campaign.asset_type}`,
+    });
+  }
+
+  if (campaign.max_per_user) {
+    const { rows: userCapRows } = await db.query(
+      'SELECT COALESCE(SUM(amount), 0) AS total FROM contributions WHERE campaign_id = $1 AND sender_public_key = $2',
+      [campaign_id, contributorPublicKey],
+    );
+    const alreadyContributed = parseAmountToStroops(userCapRows[0].total);
+    if (alreadyContributed + parseAmountToStroops(amount) > parseAmountToStroops(campaign.max_per_user)) {
       return res.status(400).json({
-        error: `Minimum contribution is ${campaign.min_contribution} ${campaign.asset_type}`,
+        error: `You have already contributed ${formatStroops(alreadyContributed)} ${campaign.asset_type}. The per-contributor limit is ${campaign.max_per_user}.`,
       });
     }
-
-    if (campaign.max_contribution && parseFloat(amount) > parseFloat(campaign.max_contribution)) {
-      return res.status(400).json({
-        error: `Maximum contribution is ${campaign.max_contribution} ${campaign.asset_type}`,
-      });
-    }
-
-    if (campaign.max_per_user) {
-      const { rows: userCapRows } = await db.query(
-        'SELECT COALESCE(SUM(amount), 0) AS total FROM contributions WHERE campaign_id = $1 AND sender_public_key = $2',
-        [campaign_id, contributorPublicKey],
-      );
-      const alreadyContributed = parseFloat(userCapRows[0].total);
-      if (alreadyContributed + parseFloat(amount) > parseFloat(campaign.max_per_user)) {
-        return res.status(400).json({
-          error: `You have already contributed ${alreadyContributed} ${campaign.asset_type}. The per-contributor limit is ${campaign.max_per_user}.`,
-        });
-      }
-    }
+  }
 
     try {
       const result = await submitCustodialContribution({
@@ -554,7 +619,7 @@ router.post(
         stellar_transaction_id: result.stellarTransactionId,
         message: "Transaction submitted",
         conversion_quote: result.conversionQuote,
-        ...(result.platform_fee_amount != null
+        ...(result.platform_fee_amount !== null && result.platform_fee_amount !== undefined
           ? { platform_fee_amount: result.platform_fee_amount }
           : {}),
       });
@@ -587,8 +652,8 @@ router.post(
       });
     }
 
-    if (Number(campaign.raised_amount) + Number(amount) >= Number(campaign.target_amount)) {
-      sendEmail({
+    if (parseAmountToStroops(campaign.raised_amount) + parseAmountToStroops(amount) >= parseAmountToStroops(campaign.target_amount)) {
+      sendEmailSafe({
         to: campaign.creator_email,
         subject: `Target Reached for ${campaign.title}!`,
         text: `Congratulations! Your campaign "${campaign.title}" has reached its target of ${campaign.target_amount} ${campaign.asset_type}. You can now start the withdrawal process.`

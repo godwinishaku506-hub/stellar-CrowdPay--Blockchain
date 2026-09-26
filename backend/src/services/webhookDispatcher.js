@@ -1,5 +1,125 @@
 const crypto = require('crypto');
+const dns = require('dns').promises;
+const net = require('net');
 const db = require('../config/database');
+
+/**
+ * SSRF protection — validate a webhook callback URL before making an outbound request.
+ *
+ * Rules enforced:
+ *  1. Scheme must be https (http is rejected to prevent plaintext credential leakage).
+ *  2. Hostname must not be a loopback address (localhost, 127.x.x.x, ::1).
+ *  3. Hostname must not fall inside private/link-local IP ranges:
+ *       - 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16  (RFC 1918)
+ *       - 169.254.0.0/16  (link-local / AWS metadata endpoint)
+ *       - fc00::/7, fe80::/10  (IPv6 ULA / link-local)
+ *  4. After DNS resolution the resolved IPs are checked against the same ranges
+ *     so that a public-looking hostname cannot CNAME to an internal address.
+ *
+ * @param {string} rawUrl
+ * @throws {Error} if the URL is invalid or targets a forbidden range
+ */
+async function assertSafeWebhookUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error(`Invalid webhook URL: ${rawUrl}`);
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`Webhook URL must use HTTPS (got ${parsed.protocol})`);
+  }
+
+  const rawHostname = parsed.hostname;
+  // URL keeps IPv6 literals wrapped in brackets, e.g. [::1] — strip them for net.isIP()
+  const hostname = rawHostname.startsWith('[') && rawHostname.endsWith(']')
+    ? rawHostname.slice(1, -1)
+    : rawHostname;
+
+  // Reject numeric IP literals directly (no DNS needed)
+  // URL parser strips brackets from IPv6 literals, e.g. [::1] → ::1
+  if (net.isIP(hostname)) {
+    assertNotPrivateIp(hostname);
+  } else {
+    // Reject well-known loopback/internal hostnames
+    const lower = hostname.toLowerCase();
+    if (lower === 'localhost' || lower.endsWith('.localhost')) {
+      throw new Error(`Webhook URL targets a forbidden host: ${hostname}`);
+    }
+
+    // DNS resolution check — protect against CNAME-to-internal tricks
+    let addresses;
+    try {
+      addresses = await dns.resolve(hostname);
+    } catch {
+      // If we cannot resolve the host, fail safe
+      throw new Error(`Webhook URL hostname could not be resolved: ${hostname}`);
+    }
+
+    for (const addr of addresses) {
+      assertNotPrivateIp(addr);
+    }
+  }
+}
+
+/**
+ * Throw if `ip` is a loopback, link-local, or private-range address.
+ * Supports both IPv4 and IPv6.
+ */
+function assertNotPrivateIp(ip) {
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map(Number);
+    const [a, b] = parts;
+
+    if (a === 127) throw new Error(`Webhook URL resolves to a loopback address: ${ip}`);
+    if (a === 10) throw new Error(`Webhook URL resolves to a private address: ${ip}`);
+    if (a === 172 && b >= 16 && b <= 31) throw new Error(`Webhook URL resolves to a private address: ${ip}`);
+    if (a === 192 && b === 168) throw new Error(`Webhook URL resolves to a private address: ${ip}`);
+    if (a === 169 && b === 254) throw new Error(`Webhook URL resolves to a link-local address: ${ip}`);
+    if (a === 0) throw new Error(`Webhook URL resolves to a reserved address: ${ip}`);
+    if (a === 100 && b >= 64 && b <= 127) throw new Error(`Webhook URL resolves to a shared-address-space (CGNAT) address: ${ip}`);
+  } else if (net.isIPv6(ip)) {
+    const lower = ip.toLowerCase();
+
+    // ::1 loopback
+    if (lower === '::1') throw new Error(`Webhook URL resolves to a loopback address: ${ip}`);
+
+    // Expand and check common prefixes (simplified but sufficient for the threat model)
+    // fe80::/10 link-local
+    if (lower.startsWith('fe80:') || lower.startsWith('fe81:') ||
+        lower.startsWith('fe82:') || lower.startsWith('fe83:') ||
+        lower.startsWith('fe84:') || lower.startsWith('fe85:') ||
+        lower.startsWith('fe86:') || lower.startsWith('fe87:') ||
+        lower.startsWith('fe88:') || lower.startsWith('fe89:') ||
+        lower.startsWith('fe8a:') || lower.startsWith('fe8b:') ||
+        lower.startsWith('fe8c:') || lower.startsWith('fe8d:') ||
+        lower.startsWith('fe8e:') || lower.startsWith('fe8f:') ||
+        lower.startsWith('fe90:') || lower.startsWith('fe91:') ||
+        lower.startsWith('fe92:') || lower.startsWith('fe93:') ||
+        lower.startsWith('fe94:') || lower.startsWith('fe95:') ||
+        lower.startsWith('fe96:') || lower.startsWith('fe97:') ||
+        lower.startsWith('fe98:') || lower.startsWith('fe99:') ||
+        lower.startsWith('fe9a:') || lower.startsWith('fe9b:') ||
+        lower.startsWith('fe9c:') || lower.startsWith('fe9d:') ||
+        lower.startsWith('fe9e:') || lower.startsWith('fe9f:') ||
+        lower.startsWith('fea0:') || lower.startsWith('feb0:') ||
+        lower.startsWith('febf:')) {
+      throw new Error(`Webhook URL resolves to a link-local IPv6 address: ${ip}`);
+    }
+    // fc00::/7 ULA (fc00:: – fdff::)
+    if (lower.startsWith('fc') || lower.startsWith('fd')) {
+      throw new Error(`Webhook URL resolves to a private IPv6 ULA address: ${ip}`);
+    }
+    // ::ffff:0:0/96 — IPv4-mapped IPv6 addresses: recursively validate the v4 part
+    if (lower.startsWith('::ffff:')) {
+      const v4Part = ip.slice(7);
+      if (net.isIPv4(v4Part)) {
+        assertNotPrivateIp(v4Part);
+      }
+    }
+  }
+}
 
 const WEBHOOK_EVENTS = {
   CAMPAIGN_FUNDED: 'campaign.funded',
@@ -82,6 +202,17 @@ async function processDelivery(deliveryId) {
 
   const bodyUtf8 = JSON.stringify(row.payload);
   const sig = hmacSignature(row.secret, bodyUtf8);
+
+  // SSRF protection: validate URL before sending the request
+  try {
+    await assertSafeWebhookUrl(row.url);
+  } catch (ssrfErr) {
+    await db.query(
+      `UPDATE webhook_deliveries SET status = 'failed', last_error = $2, updated_at = NOW() WHERE id = $1`,
+      [deliveryId, ssrfErr.message]
+    );
+    return;
+  }
 
   await db.query(
     `UPDATE webhook_deliveries SET attempt_count = $2, status = 'delivering', updated_at = NOW() WHERE id = $1`,
@@ -225,6 +356,17 @@ async function processCampaignWebhookDelivery(deliveryId) {
   const bodyUtf8 = JSON.stringify(row.payload);
   const sig = hmacSignature(row.secret, bodyUtf8);
 
+  // SSRF protection: validate URL before sending the request
+  try {
+    await assertSafeWebhookUrl(row.url);
+  } catch (ssrfErr) {
+    await db.query(
+      `UPDATE campaign_webhook_deliveries SET status = 'failed', last_error = $2, failed_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [deliveryId, ssrfErr.message]
+    );
+    return;
+  }
+
   await db.query(
     `UPDATE campaign_webhook_deliveries SET attempt_count = $2, status = 'delivering', updated_at = NOW() WHERE id = $1`,
     [deliveryId, nextAttempt]
@@ -322,6 +464,8 @@ module.exports = {
   MAX_DELIVERY_ATTEMPTS,
   MAX_CAMPAIGN_DELIVERY_ATTEMPTS,
   hmacSignature,
+  assertSafeWebhookUrl,
+  assertNotPrivateIp,
   emitWebhookEventForUser,
   emitWebhookEventForCampaign,
   processDelivery,

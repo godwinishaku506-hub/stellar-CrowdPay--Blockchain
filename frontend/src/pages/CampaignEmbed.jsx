@@ -3,6 +3,22 @@ import React, { useEffect, useState } from 'react';
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const BASE_URL = import.meta.env.VITE_API_URL || `${API_BASE_URL}/api`;
 
+// Only post to the embedding host's origin (never '*'); skip when it can't be determined.
+export function getParentOrigin() {
+  try {
+    return document.referrer ? new URL(document.referrer).origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function postToParent(message) {
+  const origin = getParentOrigin();
+  if (origin && window.parent !== window) {
+    window.parent.postMessage(message, origin);
+  }
+}
+
 export default function CampaignEmbed() {
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +91,7 @@ export default function CampaignEmbed() {
   useEffect(() => {
     const notifyHeight = () => {
       const height = document.documentElement.scrollHeight;
-      window.parent.postMessage({ type: 'resize', height }, '*');
+      postToParent({ type: 'resize', height });
     };
 
     notifyHeight();
@@ -154,7 +170,7 @@ export default function CampaignEmbed() {
         style={styles.ctaButton}
         onClick={() => {
           // Notify parent that user clicked (for analytics tracking)
-          window.parent.postMessage({ type: 'cta_click', campaignId: campaign.id }, '*');
+          postToParent({ type: 'cta_click', campaignId: campaign.id });
         }}
       >
         Back this campaign

@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { stellarExpertAccountUrl } from '../config/stellar';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
-const BASE_URL = import.meta.env.VITE_API_URL || `${API_BASE_URL}/api`;
+import { api } from '../services/api';
 
 export default function Profile() {
-  const { user, token, ready, updateUser } = useAuth();
+  const { user, ready, updateUser } = useAuth();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -42,19 +40,7 @@ export default function Profile() {
     setError('');
     setSuccess('');
     try {
-      const res = await fetch(`${BASE_URL}/users/me`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ name: name.trim() })
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to update profile');
-      }
-      const updatedUser = await res.json();
+      const updatedUser = await api.updateMe({ name: name.trim() });
       if (updateUser) updateUser(updatedUser);
       setSuccess('Profile updated successfully');
       setTimeout(() => setSuccess(''), 3000);
@@ -141,4 +127,4 @@ export default function Profile() {
       </div>
     </main>
   );
-}
+}

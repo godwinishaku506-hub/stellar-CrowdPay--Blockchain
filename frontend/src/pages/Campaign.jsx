@@ -226,10 +226,12 @@ export default function Campaign() {
       .getCampaignUpdates(id, { limit: 20 })
       .then(setUpdates)
       .catch(() => setUpdates([]));
-    api
-      .getCampaignAnalytics(id)
-      .then(setAnalytics)
-      .catch(() => setAnalytics(null));
+    if (token) {
+      api
+        .getCampaignAnalytics(id)
+        .then(setAnalytics)
+        .catch(() => setAnalytics(null));
+    }
 
     // Check for pending withdrawals
     if (token) {
@@ -361,7 +363,7 @@ export default function Campaign() {
 
   async function handleClone() {
     try {
-      const data = await api.getCloneData(id, token);
+      const data = await api.getCloneData(id);
       navigate('/campaigns/new', { state: { prefill: data } });
     } catch (err) {
       alert(err.message || 'Failed to fetch campaign clone data');
@@ -628,7 +630,7 @@ export default function Campaign() {
   const canPostUpdate =
     currentUserId && String(campaign.creator_id) === String(currentUserId);
   const campaignUrl = `${window.location.origin}/campaigns/${id}`;
-  const embedCode = `<iframe src="${window.location.origin}/widget/campaigns/${id}" width="320" height="120" frameborder="0" style="border-radius:10px"></iframe>`;
+  const embedCode = `<iframe src="${window.location.origin}/widget/campaigns/${id}" width="320" height="120" frameborder="0" title="CrowdPay campaign"></iframe>`;
 
   function canEditUpdate(update) {
     return (
@@ -1619,7 +1621,7 @@ export default function Campaign() {
 
 
       {/* Analytics Section */}
-      {analytics && (
+      {isOwner && analytics && (
         <div style={{ marginBottom: "2rem" }}>
           <h2 style={styles.sectionTitle}>Analytics</h2>
           {!analytics.dailyTotals || analytics.dailyTotals.length === 0 ? (
