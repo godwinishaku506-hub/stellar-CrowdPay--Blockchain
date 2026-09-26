@@ -315,6 +315,11 @@ export const api = {
   getWithdrawalEvents: (id) => request("GET", `/withdrawals/${id}/events`),
   getWithdrawal: (id) => request("GET", `/withdrawals/${id}`),
 
+  getStellarTransactions: ({ campaignId, status, limit } = {}) =>
+    request("GET", "/stellar/transactions", null, {
+      query: { campaign_id: campaignId, status, limit },
+    }),
+
   raiseDispute: (campaignId, body) =>
     request("POST", `/campaigns/${campaignId}/disputes`, body),
   getCampaignDisputes: (campaignId) =>

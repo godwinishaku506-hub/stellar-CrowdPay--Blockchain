@@ -57,4 +57,27 @@ describe('api', () => {
     expect(init.credentials).toBe('include');
     expect(JSON.stringify(init.headers || {})).not.toMatch(/Bearer/);
   });
+
+  it('getStellarTransactions hits GET /stellar/transactions with campaign_id and limit', async () => {
+    const rows = [
+      {
+        id: 'st-1',
+        kind: 'contribution',
+        status: 'indexed',
+        tx_hash: 'abc123def456',
+        created_at: '2026-09-01T00:00:00.000Z',
+      },
+    ];
+    const fetchFn = mockFetch(rows);
+    await expect(
+      api.getStellarTransactions({ campaignId: 'camp-1', limit: 11 }),
+    ).resolves.toEqual(rows);
+
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toMatch(/\/api\/stellar\/transactions\?/);
+    expect(url).toContain('campaign_id=camp-1');
+    expect(url).toContain('limit=11');
+    expect(init.method).toBe('GET');
+    expect(init.credentials).toBe('include');
+  });
 });
