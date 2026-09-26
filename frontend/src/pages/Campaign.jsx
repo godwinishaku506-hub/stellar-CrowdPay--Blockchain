@@ -14,10 +14,32 @@ import VerificationBadge from "../components/VerificationBadge";
 import CampaignStatusBadge from "../components/CampaignStatusBadge";
 import { stellarExpertTxUrl } from "../config/stellar";
 import CampaignQRCode from "../components/CampaignQRCode";
-import { markdownToHtml } from "../lib/markdown";
-import { useDialog } from "../context/DialogContext";
 import { getNetwork, signTransaction } from '@stellar/freighter-api';
 import { isConnected, getPublicKey } from "@stellar/freighter-api";
+
+function escapeHtml(text) {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function markdownToHtml(markdown) {
+  const escaped = escapeHtml(markdown || "");
+  return escaped
+    .replace(/^### (.*)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.*)$/gm, "<h2>$1</h2>")
+    .replace(/^# (.*)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.*?)\*/g, "<em>$1</em>")
+    .replace(
+      /\[(.*?)\]\((https?:\/\/[^\s)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+    )
+    .replace(/\n/g, "<br />");
+}
 
 function progressColor(pct, status) {
   if (status === 'funded' || pct >= 100) return '#10b981'; // green — goal reached
@@ -55,7 +77,6 @@ function ContributionRow({ c }) {
               type="button"
               onClick={handleCopy}
               title="Copy full public key"
-              aria-label={copied ? "Public key copied" : "Copy full public key"}
               style={{
                 background: "none",
                 border: "none",
@@ -107,7 +128,6 @@ export default function Campaign() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, token } = useAuth();
-  const dialog = useDialog();
 
   const [campaign, setCampaign] = useState(null);
   const [loadError, setLoadError] = useState("");
@@ -206,10 +226,12 @@ export default function Campaign() {
       .getCampaignUpdates(id, { limit: 20 })
       .then(setUpdates)
       .catch(() => setUpdates([]));
-    api
-      .getCampaignAnalytics(id)
-      .then(setAnalytics)
-      .catch(() => setAnalytics(null));
+    if (token) {
+      api
+        .getCampaignAnalytics(id)
+        .then(setAnalytics)
+        .catch(() => setAnalytics(null));
+    }
 
     // Check for pending withdrawals
     if (token) {
@@ -341,10 +363,10 @@ export default function Campaign() {
 
   async function handleClone() {
     try {
-      const data = await api.getCloneData(id, token);
+      const data = await api.getCloneData(id);
       navigate('/campaigns/new', { state: { prefill: data } });
     } catch (err) {
-      await dialog.alert(err.message || 'Failed to fetch campaign clone data');
+      alert(err.message || 'Failed to fetch campaign clone data');
     }
   }
 
@@ -383,17 +405,17 @@ export default function Campaign() {
         ),
       );
     } catch (err) {
-      await dialog.alert(err.message || "Failed to update role");
+      alert(err.message || "Failed to update role");
     }
   }
 
   async function handleRemoveMember(userId) {
-    if (!(await dialog.confirm("Are you sure you want to remove this member?", { action: "member.remove" }))) return;
+    if (!confirm("Are you sure you want to remove this member?")) return;
     try {
       await api.removeCampaignMember(id, userId, token);
       setMembers((prev) => prev.filter((m) => m.user_id !== userId));
     } catch (err) {
-      await dialog.alert(err.message || "Failed to remove member");
+      alert(err.message || "Failed to remove member");
     }
   }
 
@@ -677,7 +699,7 @@ export default function Campaign() {
   }
 
   async function deleteUpdate(updateId) {
-    if (!(await dialog.confirm("Delete this campaign update?", { action: "update.delete" }))) return;
+    if (!confirm("Delete this campaign update?")) return;
 
     setUpdatesError("");
     try {
@@ -1114,10 +1136,10 @@ export default function Campaign() {
       </div>
 
       <div style={{ marginBottom: '1.75rem' }}>
-        <button type="button" className="btn-secondary" data-no-print aria-expanded={showQR} aria-controls="campaign-qr" onClick={() => setShowQR((v) => !v)}>
+        <button type="button" className="btn-secondary" data-no-print onClick={() => setShowQR((v) => !v)}>
           {showQR ? 'Hide QR code' : 'Show QR code'}
         </button>
-        <div id="campaign-qr" className="qr-wrapper" style={{ marginTop: '1rem', display: showQR ? 'flex' : 'none', justifyContent: 'center' }}>
+        <div className="qr-wrapper" style={{ marginTop: '1rem', display: showQR ? 'flex' : 'none', justifyContent: 'center' }}>
           <CampaignQRCode url={`${window.location.origin}/campaigns/${id}`} size={200} />
         </div>
         {showQR && (
@@ -1354,7 +1376,6 @@ export default function Campaign() {
                   Email
                 </label>
                 <input
-                  aria-label="Invite email"
                   type="email"
                   placeholder="member@example.com"
                   value={inviteForm.email}
@@ -1377,7 +1398,6 @@ export default function Campaign() {
                   Role
                 </label>
                 <select
-                  aria-label="Invite role"
                   value={inviteForm.role}
                   onChange={(e) =>
                     setInviteForm((s) => ({ ...s, role: e.target.value }))
@@ -1471,7 +1491,6 @@ export default function Campaign() {
                       }}
                     >
                       <select
-                        aria-label={`Role for ${member.email}`}
                         value={member.role}
                         onChange={(e) =>
                           handleRoleChange(member.user_id, e.target.value)
@@ -1520,7 +1539,6 @@ export default function Campaign() {
             {editingUpdateId ? "Edit update" : "Post update"}
           </strong>
           <input
-            aria-label="Update title"
             placeholder="Update title"
             value={updateForm.title}
             onChange={(e) =>
@@ -1530,7 +1548,6 @@ export default function Campaign() {
             style={{ marginBottom: "0.5rem" }}
           />
           <textarea
-            aria-label="Update body"
             placeholder="Write markdown update..."
             value={updateForm.body}
             onChange={(e) =>
@@ -1604,7 +1621,7 @@ export default function Campaign() {
 
 
       {/* Analytics Section */}
-      {analytics && (
+      {isOwner && analytics && (
         <div style={{ marginBottom: "2rem" }}>
           <h2 style={styles.sectionTitle}>Analytics</h2>
           {!analytics.dailyTotals || analytics.dailyTotals.length === 0 ? (
@@ -1977,7 +1994,6 @@ export default function Campaign() {
                 Title
               </label>
               <input
-                aria-label="Title"
                 type="text"
                 value={editFormData.title}
                 onChange={(e) =>
@@ -2015,7 +2031,6 @@ export default function Campaign() {
                 Description
               </label>
               <textarea
-                aria-label="Description"
                 value={editFormData.description}
                 onChange={(e) =>
                   setEditFormData({
@@ -2057,7 +2072,6 @@ export default function Campaign() {
                 Deadline (optional)
               </label>
               <input
-                aria-label="Deadline"
                 type="date"
                 value={editFormData.deadline}
                 onChange={(e) =>
@@ -2166,7 +2180,6 @@ export default function Campaign() {
                 Type the campaign title to confirm:
               </label>
               <input
-                aria-label="Type the campaign title to confirm"
                 type="text"
                 value={deleteConfirmation}
                 onChange={(e) => setDeleteConfirmation(e.target.value)}
