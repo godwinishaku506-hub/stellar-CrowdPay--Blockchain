@@ -224,7 +224,7 @@ router.get('/', getCampaignsValidation, validateRequest, asyncHandler(async (req
    *                   items:
    *                     type: object
    */
-  const { search, status, asset, sort = 'newest' } = req.query;
+  const { search, status, asset, category, sort = 'newest' } = req.query;
   const limit = Math.min(Number(req.query.limit || 20), 100);
   const offset = Math.max(Number(req.query.offset || 0), 0);
   const filters = [];
@@ -242,6 +242,10 @@ router.get('/', getCampaignsValidation, validateRequest, asyncHandler(async (req
   if (asset) {
     params.push(asset);
     filters.push(`c.asset_type = $${params.length}`);
+  }
+  if (category) {
+    params.push(category);
+    filters.push(`c.category = $${params.length}`);
   }
   if (search) {
     const escaped = String(search).replace(/[%_\\]/g, '\\$&');
@@ -371,6 +375,18 @@ router.post('/:id/milestones', requireAuth, requireCampaignMember('owner'), asyn
   } finally {
     client.release();
   }
+}));
+
+// Get active campaign counts per category
+router.get('/categories', asyncHandler(async (req, res) => {
+  const { rows } = await db.query(`
+    SELECT category, COUNT(*)::int AS count
+    FROM campaigns
+    WHERE status = 'active' AND deleted_at IS NULL AND category IS NOT NULL
+    GROUP BY category
+    ORDER BY count DESC, category ASC
+  `);
+  res.json(rows);
 }));
 
 // Get single Campaign
