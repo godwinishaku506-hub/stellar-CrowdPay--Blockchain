@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useDialog } from '../context/DialogContext';
 
 const DISPUTE_STATUSES = ['open', 'under_review', 'resolved_creator', 'resolved_contributor', 'closed'];
 
@@ -9,6 +10,7 @@ function DisputeQueue() {
   const [disputes, setDisputes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const dialog = useDialog();
 
   useEffect(() => {
     // Load open/under_review disputes across all campaigns via admin endpoint
@@ -27,14 +29,14 @@ function DisputeQueue() {
   }, []);
 
   async function resolve(dispute, status) {
-    const note = window.prompt(`Resolution note (${status}):`, '');
+    const note = await dialog.prompt(`Resolution note (${status}):`, { action: 'dispute.resolve' });
     if (note === null) return;
     setBusyId(dispute.id);
     try {
       const updated = await api.updateDispute(dispute.id, { status, resolution_note: note || undefined });
       setDisputes((prev) => prev.map((d) => (d.id === updated.id ? { ...d, ...updated } : d)));
     } catch (err) {
-      alert(err.message || 'Could not update dispute');
+      await dialog.alert(err.message || 'Could not update dispute');
     } finally {
       setBusyId(null);
     }
@@ -106,6 +108,7 @@ function DisputeQueue() {
 function CampaignsQueue() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const dialog = useDialog();
 
   useEffect(() => {
     load();
@@ -118,23 +121,23 @@ function CampaignsQueue() {
   }
 
   async function feature(id) {
-    const note = window.prompt('Featured note (optional):', '');
+    const note = await dialog.prompt('Featured note (optional):', { action: 'campaign.feature' });
     if (note === null) return;
     try {
       await api.adminFeatureCampaign(id, { note });
       load();
     } catch (err) {
-      alert(err.message || 'Could not feature campaign');
+      await dialog.alert(err.message || 'Could not feature campaign');
     }
   }
 
   async function unfeature(id) {
-    if (!window.confirm('Remove from featured?')) return;
+    if (!(await dialog.confirm('Remove from featured?', { action: 'campaign.unfeature' }))) return;
     try {
       await api.adminUnfeatureCampaign(id);
       load();
     } catch (err) {
-      alert(err.message || 'Could not unfeature campaign');
+      await dialog.alert(err.message || 'Could not unfeature campaign');
     }
   }
 
