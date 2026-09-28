@@ -45,7 +45,7 @@ function friendlyFreighterError(err, fallback) {
 }
 
 export default function ContributeModal({ campaign, onClose, onSuccess, guestFreighterMode = false }) {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [amount, setAmount] = useState('');
   const [sendAsset, setSendAsset] = useState(campaign.asset_type);
   const [paymentMethod, setPaymentMethod] = useState(guestFreighterMode ? 'freighter' : 'custodial');
@@ -201,7 +201,7 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
 
     const poll = async () => {
       try {
-        const next = await api.getAnchorDepositStatus(anchorSession.id, token);
+        const next = await api.getAnchorDepositStatus(anchorSession.id);
         if (stopped) return;
         setAnchorSession(next);
         if (next.contribution_tx_hash) {
@@ -234,7 +234,7 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
       stopped = true;
       window.clearInterval(intervalId);
     };
-  }, [anchorSession?.id, onSuccess, phase, token]);
+  }, [anchorSession?.id, onSuccess, phase]);
 
   useEffect(() => {
     const modal = modalRef.current;
@@ -411,7 +411,7 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
         for (let i = 0; i < maxAttempts; i++) {
           await new Promise(r => setTimeout(r, 2000));
           try {
-            const finalizationResult = await api.getContributionFinalization(txHash, token);
+            const finalizationResult = await api.getContributionFinalization(txHash);
             if (finalizationResult.finalization_status === 'finalized') {
               setPhase('success');
               onSuccess();
@@ -452,6 +452,9 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
   function handleClose() {
     if (anchorPopupRef.current && !anchorPopupRef.current.closed) {
       anchorPopupRef.current.close();
+    }
+    if (phase === 'success') {
+      onSuccess?.();
     }
     onClose();
   }

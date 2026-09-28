@@ -11,7 +11,7 @@ vi.mock('@stellar/freighter-api', () => ({
 }));
 
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ token: 'test-token', user: { wallet_public_key: 'GUSER' } }),
+  useAuth: () => ({ user: { wallet_public_key: 'GUSER' } }),
 }));
 
 const mockContribute = vi.fn();
