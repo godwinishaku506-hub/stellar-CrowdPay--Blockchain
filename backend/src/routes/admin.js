@@ -609,4 +609,72 @@ router.post('/campaigns/:id/reconcile', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/refund-queue
+ * List all pending refunds awaiting approval with SLA tracking
+ */
+router.get('/refund-queue', async (req, res) => {
+  try {
+    const { status, overdue_only, limit = 50, offset = 0 } = req.query;
+    const limitNum = Math.min(parseInt(limit) || 50, 200);
+    const offsetNum = parseInt(offset) || 0;
+
+    let where = `WHERE wr.is_refund = true`;
+    const params = [];
+
+    if (status) {
+      params.push(status);
+      where += ` AND wr.status = $${params.length}`;
+    }
+
+    // Add overdue filter: refunds older than 7 days with status 'pending' or 'on_hold'
+    if (overdue_only === 'true') {
+      where += ` AND wr.status IN ('pending', 'on_hold') AND wr.created_at < NOW() - INTERVAL '7 days'`;
+    }
+
+    const { rows } = await db.query(
+      `SELECT wr.id, wr.campaign_id, wr.amount, wr.asset, wr.destination_key, wr.status,
+              wr.is_refund, wr.dispute_id, wr.created_at, wr.creator_signed, wr.platform_signed,
+              c.title as campaign_title,
+              u.email as contributor_email,
+              CASE
+                WHEN wr.status IN ('pending', 'on_hold') AND wr.created_at < NOW() - INTERVAL '7 days'
+                THEN true
+                ELSE false
+              END as is_overdue,
+              EXTRACT(EPOCH FROM (NOW() - wr.created_at)) / 86400 as days_pending
+       FROM withdrawal_requests wr
+       JOIN campaigns c ON c.id = wr.campaign_id
+       LEFT JOIN users u ON u.wallet_public_key = wr.destination_key
+       ${where}
+       ORDER BY wr.created_at ASC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limitNum, offsetNum]
+    );
+
+    const { rows: countRows } = await db.query(
+      `SELECT COUNT(*) FROM withdrawal_requests wr ${where}`,
+      params
+    );
+    const total = parseInt(countRows[0].count);
+
+    res.json({
+      refunds: rows.map(r => ({
+        ...r,
+        amount: parseFloat(r.amount),
+        days_pending: parseFloat(r.days_pending.toFixed(2)),
+        is_overdue: r.is_overdue,
+      })),
+      pagination: {
+        limit: limitNum,
+        offset: offsetNum,
+        total,
+      },
+    });
+  } catch (err) {
+    logger.error('Error fetching refund queue', { error: err.message });
+    res.status(500).json({ error: 'Failed to fetch refund queue' });
+  }
+});
+
 module.exports = router;
