@@ -17,6 +17,12 @@ import CampaignQRCode from "../components/CampaignQRCode";
 import { getNetwork, signTransaction } from '@stellar/freighter-api';
 import { isConnected, getPublicKey } from "@stellar/freighter-api";
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(
+  /\/+$/,
+  "",
+);
+const BASE_URL = `${API_BASE_URL}/api`;
+
 function escapeHtml(text) {
   return text
     .replaceAll("&", "&amp;")
@@ -129,6 +135,7 @@ function isCampaignOwner(user, campaign) {
 
 export default function Campaign() {
   const contributeBtnRef = useRef(null);
+  const showAllRef = useRef(false);
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -314,52 +321,108 @@ export default function Campaign() {
   }, [id, isLive, campaign, showAll]);
 
   useEffect(() => {
+    showAllRef.current = showAll;
+  }, [showAll]);
+
+  useEffect(() => {
+    if (!id) return;
     if (!window.EventSource) return;
 
-    const es = new EventSource(`/api/campaigns/${id}/stream`);
+    let es = null;
+    let reconnectTimer = null;
+    let retryDelay = 1000;
+    const maxRetryDelay = 30000;
+    let isMounted = true;
 
-    es.onopen = () => setIsLive(true);
+    function connect() {
+      if (!isMounted) return;
+      if (es) {
+        try {
+          es.close();
+        } catch {}
+        es = null;
+      }
 
-    es.onmessage = (e) => {
-      let msg;
       try {
-        msg = JSON.parse(e.data);
+        es = new EventSource(`${BASE_URL}/campaigns/${id}/stream`);
       } catch {
+        scheduleReconnect();
         return;
       }
 
-      if (msg.type === "contribution") {
-        setCampaign((prev) =>
-          prev ? { ...prev, raised_amount: msg.raised_amount } : prev,
-        );
-        setContributions((prev) => {
-          const current = prev || [];
-          const exists = current.some(
-            (c) => c.tx_hash === msg.contribution.tx_hash,
+      es.onopen = () => {
+        if (!isMounted) return;
+        setIsLive(true);
+        retryDelay = 1000;
+      };
+
+      es.onmessage = (e) => {
+        if (!isMounted) return;
+        let msg;
+        try {
+          msg = JSON.parse(e.data);
+        } catch {
+          return;
+        }
+
+        if (msg.type === "contribution") {
+          setCampaign((prev) =>
+            prev ? { ...prev, raised_amount: msg.raised_amount } : prev,
           );
-          if (exists) return current;
+          setContributions((prev) => {
+            const current = prev || [];
+            const exists = current.some(
+              (c) => c.tx_hash === msg.contribution.tx_hash,
+            );
+            if (exists) return current;
 
-          setTotalContributions((t) => t + 1);
+            setTotalContributions((t) => t + 1);
 
-          const updated = [msg.contribution, ...current];
-          if (!showAll && updated.length > 10) {
-            return updated.slice(0, 10);
-          }
-          return updated;
-        });
-      }
-    };
+            const updated = [msg.contribution, ...current];
+            if (!showAllRef.current && updated.length > 10) {
+              return updated.slice(0, 10);
+            }
+            return updated;
+          });
+        }
+      };
 
-    es.onerror = () => {
-      setIsLive(false);
-      es.close();
-    };
+      es.onerror = () => {
+        if (!isMounted) return;
+        setIsLive(false);
+        if (es) {
+          try {
+            es.close();
+          } catch {}
+          es = null;
+        }
+        scheduleReconnect();
+      };
+    }
+
+    function scheduleReconnect() {
+      if (!isMounted) return;
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => {
+        connect();
+      }, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+    }
+
+    connect();
 
     return () => {
-      es.close();
+      isMounted = false;
+      clearTimeout(reconnectTimer);
+      if (es) {
+        try {
+          es.close();
+        } catch {}
+        es = null;
+      }
       setIsLive(false);
     };
-  }, [id, showAll]);
+  }, [id]);
 
   useEffect(() => {
     if (location.state?.created) {
@@ -633,7 +696,7 @@ export default function Campaign() {
   ).toFixed(1);
   const canPostUpdate = isCampaignOwner(user, campaign);
   const campaignUrl = `${window.location.origin}/campaigns/${id}`;
-  const embedCode = `<iframe src="${window.location.origin}/widget/campaigns/${id}" width="320" height="120" frameborder="0" title="CrowdPay campaign"></iframe>`;
+  const embedCode = `<iframe src="${window.location.origin}/embed/campaigns/${id}" width="480" height="280" frameborder="0" title="CrowdPay campaign"></iframe>`;
 
   function canEditUpdate(update) {
     return (
@@ -1143,13 +1206,8 @@ export default function Campaign() {
           {showQR ? 'Hide QR code' : 'Show QR code'}
         </button>
         <div className="qr-wrapper" style={{ marginTop: '1rem', display: showQR ? 'flex' : 'none', justifyContent: 'center' }}>
-          <CampaignQRCode url={`${window.location.origin}/campaigns/${id}`} size={200} />
+          <CampaignQRCode url={campaignUrl} size={200} />
         </div>
-        {showQR && (
-          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
-            <CampaignQRCode url={campaignUrl} size={200} />
-          </div>
-        )}
       </div>
 
       <details style={{ ...styles.card, marginTop: "-0.75rem" }}>
@@ -1204,122 +1262,6 @@ export default function Campaign() {
             )}
           </div>
         )}
-      {canPostUpdate && (
-        <div style={styles.card} data-no-print>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1rem",
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
-              Embed this campaign
-            </h3>
-            <button
-              type="button"
-              onClick={() => setShowEmbedSection(!showEmbedSection)}
-              style={{
-                background: "transparent",
-                color: "var(--color-accent)",
-                border: "1px solid var(--color-accent)",
-                padding: "0.4rem 0.8rem",
-                fontSize: "0.85rem",
-                minHeight: "auto",
-              }}
-            >
-              {showEmbedSection ? "Hide" : "Show"}
-            </button>
-          </div>
-
-          {showEmbedSection && (
-            <>
-              <p
-                style={{
-                  fontSize: "0.85rem",
-                  color: "var(--color-text-hint)",
-                  marginBottom: "1rem",
-                  lineHeight: 1.5,
-                }}
-              >
-                Add this embed code to your website or blog to display a live
-                funding widget for this campaign.
-              </p>
-
-              <div style={{ marginBottom: "1rem" }}>
-                <label
-                  style={{
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    color: "var(--color-text-hint)",
-                    display: "block",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  Embed code
-                </label>
-                <div style={{ position: "relative" }}>
-                  <pre style={styles.embedCode}>
-                    {`<iframe src="${window.location.origin}/embed/campaigns/${campaign.id}" \n        width="480" height="280" frameborder="0">\n</iframe>`}
-                  </pre>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const code = `<iframe src="${window.location.origin}/embed/campaigns/${campaign.id}" width="480" height="280" frameborder="0"></iframe>`;
-                      navigator.clipboard.writeText(code).then(() => {
-                        setEmbedCopied(true);
-                        setTimeout(() => setEmbedCopied(false), 2000);
-                      });
-                    }}
-                    style={{
-                      position: "absolute",
-                      top: "0.5rem",
-                      right: "0.5rem",
-                      background: embedCopied
-                        ? "var(--color-success-text)"
-                        : "var(--color-accent)",
-                      color: "#fff",
-                      padding: "0.4rem 0.8rem",
-                      fontSize: "0.8rem",
-                      minHeight: "auto",
-                    }}
-                  >
-                    {embedCopied ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    color: "var(--color-text-hint)",
-                    display: "block",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  Preview
-                </label>
-                <div style={styles.embedPreview}>
-                  <iframe
-                    src={`/embed/campaigns/${campaign.id}`}
-                    width="100%"
-                    height="280"
-                    frameBorder="0"
-                    title="Campaign embed preview"
-                    style={{
-                      border: "1px solid var(--color-border-light)",
-                      borderRadius: "6px",
-                    }}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
 
       {user && (
         <div id="withdrawals" data-no-print>

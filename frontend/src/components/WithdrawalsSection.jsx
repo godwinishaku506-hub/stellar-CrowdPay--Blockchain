@@ -219,7 +219,7 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, on
     }
   }
 
-  if (!token || forbidden) return null;
+  if (!user || forbidden) return null;
   if (loading) {
     return (
       <section style={styles.section} aria-label="Fund release">
@@ -670,4 +670,4 @@ const styles = {
     color: 'var(--color-text-secondary)',
     lineHeight: 1.5,
   },
-};
+};
