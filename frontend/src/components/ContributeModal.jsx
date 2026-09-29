@@ -443,6 +443,9 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
     if (anchorPopupRef.current && !anchorPopupRef.current.closed) {
       anchorPopupRef.current.close();
     }
+    if (phase === 'success') {
+      onSuccess?.();
+    }
     onClose();
   }
 

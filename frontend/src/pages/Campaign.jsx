@@ -139,7 +139,7 @@ export default function Campaign() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { user } = useAuth();
 
   const [campaign, setCampaign] = useState(null);
   const [loadError, setLoadError] = useState("");
@@ -207,13 +207,13 @@ export default function Campaign() {
   useEffect(() => {
     setLoadError("");
     api
-      .getCampaign(id, token)
+      .getCampaign(id)
       .then((data) => {
         setCampaign(data);
         if (data.user_role === "owner") {
           setIsOwner(true);
           api
-            .getCampaignMembers(id, token)
+            .getCampaignMembers(id)
             .then(setMembers)
             .catch(() => {});
         } else {
@@ -239,7 +239,7 @@ export default function Campaign() {
       .getCampaignUpdates(id, { limit: 20 })
       .then(setUpdates)
       .catch(() => setUpdates([]));
-    if (token) {
+    if (user) {
       api
         .getCampaignAnalytics(id)
         .then(setAnalytics)
@@ -247,7 +247,7 @@ export default function Campaign() {
     }
 
     // Check for pending withdrawals
-    if (token) {
+    if (user) {
       api
         .listWithdrawals(id)
         .then((withdrawals) => {
@@ -256,7 +256,7 @@ export default function Campaign() {
         })
         .catch(() => setHasPendingWithdrawal(false));
     }
-  }, [id, token, contributed, showAll]);
+  }, [id, user, contributed, showAll]);
 
   useEffect(() => {
     if (!id) return;
@@ -281,7 +281,7 @@ export default function Campaign() {
       if (document.visibilityState !== "visible") return;
       try {
         const [nextCampaign, nextContributionsData] = await Promise.all([
-          api.getCampaign(id, token),
+          api.getCampaign(id),
           api.getContributions(id, { limit: showAll ? 100 : 10, offset: 0 }),
         ]);
         if (aborted) return;
@@ -318,7 +318,7 @@ export default function Campaign() {
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [id, token, isLive, campaign, showAll]);
+  }, [id, isLive, campaign, showAll]);
 
   useEffect(() => {
     showAllRef.current = showAll;
@@ -449,7 +449,7 @@ export default function Campaign() {
     setInviteError("");
     setInviteSuccess(false);
     try {
-      const newMember = await api.inviteCampaignMember(id, inviteForm, token);
+      const newMember = await api.inviteCampaignMember(id, inviteForm);
       setMembers((prev) => [...prev, newMember]);
       setInviteForm({ email: "", role: "viewer" });
       setInviteSuccess(true);
@@ -466,7 +466,6 @@ export default function Campaign() {
         id,
         userId,
         { role: newRole },
-        token,
       );
       setMembers((prev) =>
         prev.map((m) =>
@@ -481,7 +480,7 @@ export default function Campaign() {
   async function handleRemoveMember(userId) {
     if (!confirm("Are you sure you want to remove this member?")) return;
     try {
-      await api.removeCampaignMember(id, userId, token);
+      await api.removeCampaignMember(id, userId);
       setMembers((prev) => prev.filter((m) => m.user_id !== userId));
     } catch (err) {
       alert(err.message || "Failed to remove member");
@@ -554,7 +553,7 @@ export default function Campaign() {
         return;
       }
 
-      const updated = await api.updateCampaign(campaign.id, updates, token);
+      const updated = await api.updateCampaign(campaign.id, updates);
       setCampaign(updated);
       setIsEditingCampaign(false);
       setEditFormData({ title: "", description: "", deadline: "" });
@@ -631,7 +630,7 @@ export default function Campaign() {
 
     try {
       setDeleteLoading(true);
-      await api.deleteCampaign(campaign.id, token);
+      await api.deleteCampaign(campaign.id);
       setShowDeleteDialog(false);
       setDeleteConfirmation("");
       // Redirect to home after successful deletion
@@ -1820,7 +1819,9 @@ export default function Campaign() {
         >
           <div
             style={{
-              background: "#fff",
+              background: "var(--color-surface)",
+              color: "var(--color-text-primary)",
+              border: "1px solid var(--color-border-light)",
               borderRadius: "12px",
               padding: "2rem",
               maxWidth: "500px",
@@ -1836,6 +1837,7 @@ export default function Campaign() {
                 marginTop: 0,
                 marginBottom: "1.5rem",
                 fontSize: "1.5rem",
+                color: "var(--color-text-primary)",
               }}
             >
               Edit Campaign
@@ -1844,10 +1846,10 @@ export default function Campaign() {
             {editError && (
               <p
                 style={{
-                  color: "#d32f2f",
+                  color: "var(--color-danger-text, #ef4444)",
                   marginBottom: "1rem",
                   padding: "0.75rem",
-                  background: "#ffebee",
+                  background: "var(--color-danger-bg, #fee2e2)",
                   borderRadius: "6px",
                 }}
               >
@@ -1861,6 +1863,7 @@ export default function Campaign() {
                   display: "block",
                   fontWeight: 600,
                   marginBottom: "0.5rem",
+                  color: "var(--color-text-primary)",
                 }}
               >
                 Title
@@ -1875,16 +1878,18 @@ export default function Campaign() {
                 style={{
                   width: "100%",
                   padding: "0.75rem",
-                  border: "1px solid #ddd",
+                  border: "1px solid var(--color-border-light)",
                   borderRadius: "6px",
                   fontSize: "1rem",
                   boxSizing: "border-box",
+                  background: "var(--color-bg)",
+                  color: "var(--color-text-primary)",
                 }}
               />
               <p
                 style={{
                   fontSize: "0.85rem",
-                  color: "#888",
+                  color: "var(--color-text-hint)",
                   margin: "0.25rem 0 0",
                 }}
               >
@@ -1898,6 +1903,7 @@ export default function Campaign() {
                   display: "block",
                   fontWeight: 600,
                   marginBottom: "0.5rem",
+                  color: "var(--color-text-primary)",
                 }}
               >
                 Description
@@ -1915,17 +1921,19 @@ export default function Campaign() {
                 style={{
                   width: "100%",
                   padding: "0.75rem",
-                  border: "1px solid #ddd",
+                  border: "1px solid var(--color-border-light)",
                   borderRadius: "6px",
                   fontSize: "1rem",
                   fontFamily: "inherit",
                   boxSizing: "border-box",
+                  background: "var(--color-bg)",
+                  color: "var(--color-text-primary)",
                 }}
               />
               <p
                 style={{
                   fontSize: "0.85rem",
-                  color: "#888",
+                  color: "var(--color-text-hint)",
                   margin: "0.25rem 0 0",
                 }}
               >
@@ -1939,6 +1947,7 @@ export default function Campaign() {
                   display: "block",
                   fontWeight: 600,
                   marginBottom: "0.5rem",
+                  color: "var(--color-text-primary)",
                 }}
               >
                 Deadline (optional)
@@ -1952,10 +1961,12 @@ export default function Campaign() {
                 style={{
                   width: "100%",
                   padding: "0.75rem",
-                  border: "1px solid #ddd",
+                  border: "1px solid var(--color-border-light)",
                   borderRadius: "6px",
                   fontSize: "1rem",
                   boxSizing: "border-box",
+                  background: "var(--color-bg)",
+                  color: "var(--color-text-primary)",
                 }}
               />
             </div>
@@ -2106,8 +2117,8 @@ export default function Campaign() {
                     deleteLoading || deleteConfirmation !== campaign.title
                       ? 0.6
                       : 1,
-                  background: "#dc2626",
-                  borderColor: "#dc2626",
+                  background: "var(--color-danger, #dc2626)",
+                  borderColor: "var(--color-danger, #dc2626)",
                 }}
               >
                 {deleteLoading ? "Deleting..." : "Delete Campaign"}

@@ -101,7 +101,6 @@ export default function Register() {
       if (!pk) throw new Error('Freighter did not return a public key');
       setFreighterPublicKey(pk);
       setUsingFreighter(true);
-      setForm((f) => ({ ...f, password: f.password }));
     } catch (err) {
       setError(err.message || 'Could not connect to Freighter');
     }
