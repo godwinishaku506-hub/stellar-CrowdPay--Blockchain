@@ -124,10 +124,64 @@ const { jsonBody } = require('./middleware/bodyLimits');
 
 const app = express();
 
+// Trust the number of reverse-proxy hops specified by TRUST_PROXY (default 1
+// for the single nginx hop in docker-compose). This makes express-rate-limit
+// and req.ip key on the real client IP instead of the proxy address.
+// Set to 0 (or 'false') to disable when running without a proxy.
+(function configureTrustProxy() {
+  const raw = process.env.TRUST_PROXY;
+  if (raw === undefined || raw === null || raw === '') {
+    app.set('trust proxy', 1);
+    return;
+  }
+  const asStr = String(raw).trim();
+  if (asStr === 'false' || asStr === '0') {
+    // Explicitly disabled — do not trust any proxy
+    return;
+  }
+  const asInt = parseInt(asStr, 10);
+  if (!Number.isNaN(asInt)) {
+    app.set('trust proxy', asInt);
+    return;
+  }
+  // Accept comma-separated IP list or single IP/CIDR string
+  app.set('trust proxy', asStr);
+})();
+
+/**
+ * Build the CORS origin function from the FRONTEND_URLS env var.
+ *
+ * FRONTEND_URLS is a comma-separated list of allowed origins, e.g.:
+ *   FRONTEND_URLS=http://localhost:5173,https://app.crowdpay.io,https://staging.crowdpay.io
+ *
+ * For backward-compatibility, if FRONTEND_URLS is not set we fall back to the
+ * single FRONTEND_URL value (or the hard-coded localhost default). The origin
+ * function reflects the requesting origin when it is in the allowlist and
+ * rejects it otherwise — never responding with a wildcard when credentials are
+ * enabled.
+ */
+function buildAllowedOrigins() {
+  const raw = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:5173';
+  return raw
+    .split(',')
+    .map((o) => o.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+}
+
+const allowedOrigins = buildAllowedOrigins();
+
+function corsOriginHandler(origin, callback) {
+  // Non-browser clients (API consumers, server-to-server) omit the Origin
+  // header; allow them through.
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.includes(origin)) return callback(null, origin);
+  callback(new Error(`Origin ${origin} is not allowed by CORS`));
+}
+
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: corsOriginHandler,
     credentials: true,
   })
 );
