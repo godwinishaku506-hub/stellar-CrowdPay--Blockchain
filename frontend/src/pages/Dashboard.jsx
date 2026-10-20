@@ -54,7 +54,11 @@ export default function Dashboard() {
     setLoadingCampaigns(true);
     setError('');
 
-    api.getMyBalance().then((d) => setBalance(d.balance)).catch(() => {}).finally(() => setBalanceLoading(false));
+    api
+      .getMyBalance()
+      .then((d) => setBalance(d.balance))
+      .catch(() => {})
+      .finally(() => setBalanceLoading(false));
 
     const requests = [api.getMyContributions()];
     if (isCreator) {
@@ -104,10 +108,20 @@ export default function Dashboard() {
       <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '1rem' }}>Dashboard</h1>
 
       <div className="campaign-card" style={{ marginBottom: '1rem', minHeight: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
           <div>
             <strong>Wallet balance</strong>
-            <div style={{ color: 'var(--color-text-hint)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
+            <div
+              style={{ color: 'var(--color-text-hint)', fontSize: '0.88rem', marginTop: '0.2rem' }}
+            >
               {balanceLoading
                 ? 'Loading…'
                 : balance
@@ -199,7 +213,13 @@ export default function Dashboard() {
                 >
                   <div>
                     <strong>Identity verification</strong>
-                    <div style={{ color: 'var(--color-text-hint)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
+                    <div
+                      style={{
+                        color: 'var(--color-text-hint)',
+                        fontSize: '0.88rem',
+                        marginTop: '0.2rem',
+                      }}
+                    >
                       Status: {user?.kyc_status || 'unverified'}
                       {user?.kyc_completed_at
                         ? ` • Completed ${new Date(user.kyc_completed_at).toLocaleDateString()}`
@@ -413,7 +433,10 @@ export default function Dashboard() {
         <DepositModal
           onClose={() => setShowDepositModal(false)}
           onSuccess={() => {
-            api.getMyBalance().then((d) => setBalance(d.balance)).catch(() => {});
+            api
+              .getMyBalance()
+              .then((d) => setBalance(d.balance))
+              .catch(() => {});
           }}
         />
       )}

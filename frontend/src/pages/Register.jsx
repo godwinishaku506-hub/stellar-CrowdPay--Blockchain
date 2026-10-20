@@ -4,7 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { markJustRegistered } from '../lib/onboarding';
-import { isConnected as isFreighterConnected, getPublicKey, requestAccess } from '@stellar/freighter-api';
+import {
+  isConnected as isFreighterConnected,
+  getPublicKey,
+  requestAccess,
+} from '@stellar/freighter-api';
 
 function passwordStrength(pw) {
   if (!pw) return null;
@@ -23,7 +27,13 @@ export default function Register() {
   const { t } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'contributor' });
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    role: 'contributor',
+  });
   const [freighterAvailable, setFreighterAvailable] = useState(false);
   const [usingFreighter, setUsingFreighter] = useState(false);
   const [freighterPublicKey, setFreighterPublicKey] = useState('');
@@ -108,13 +118,32 @@ export default function Register() {
 
   return (
     <main className="container" style={{ paddingTop: '4rem', maxWidth: '400px' }}>
-      <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '0.5rem' }}>{t('register.title')}</h1>
+      <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '0.5rem' }}>
+        {t('register.title')}
+      </h1>
       <p style={{ color: 'var(--color-text-hint)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
         {t('register.subtitle')}
       </p>
-      <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-        <input aria-label={t('register.fullName')} placeholder={t('register.fullName')} value={form.name} onChange={set('name')} required />
-        <input aria-label={t('register.email')} type="email" placeholder={t('register.email')} value={form.email} onChange={set('email')} required />
+      <form
+        noValidate
+        onSubmit={handleSubmit}
+        style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}
+      >
+        <input
+          aria-label={t('register.fullName')}
+          placeholder={t('register.fullName')}
+          value={form.name}
+          onChange={set('name')}
+          required
+        />
+        <input
+          aria-label={t('register.email')}
+          type="email"
+          placeholder={t('register.email')}
+          value={form.email}
+          onChange={set('email')}
+          required
+        />
         <div style={{ position: 'relative' }}>
           <input
             id="reg-password"
@@ -149,19 +178,39 @@ export default function Register() {
             {showPassword ? t('common.hide') : t('common.show')}
           </button>
         </div>
-        {form.password && (() => {
-          const s = passwordStrength(form.password);
-          return (
-            <div style={{ marginTop: '-0.4rem' }}>
-              <div style={{ height: '4px', borderRadius: '99px', background: '#e5e5e5', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: s.width, background: s.color, transition: 'width 0.2s, background 0.2s', borderRadius: '99px' }} />
+        {form.password &&
+          (() => {
+            const s = passwordStrength(form.password);
+            return (
+              <div style={{ marginTop: '-0.4rem' }}>
+                <div
+                  style={{
+                    height: '4px',
+                    borderRadius: '99px',
+                    background: '#e5e5e5',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: s.width,
+                      background: s.color,
+                      transition: 'width 0.2s, background 0.2s',
+                      borderRadius: '99px',
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: '0.78rem', color: s.color, fontWeight: 600 }}>
+                  {s.label}
+                </span>
               </div>
-              <span style={{ fontSize: '0.78rem', color: s.color, fontWeight: 600 }}>{s.label}</span>
-            </div>
-          );
-        })()}
+            );
+          })()}
         <div className="form-stack" style={{ position: 'relative' }}>
-          <label className="label-strong" htmlFor="reg-confirm">{t('register.confirmPassword')}</label>
+          <label className="label-strong" htmlFor="reg-confirm">
+            {t('register.confirmPassword')}
+          </label>
           <input
             id="reg-confirm"
             type={showConfirmPassword ? 'text' : 'password'}
@@ -199,7 +248,11 @@ export default function Register() {
         {freighterAvailable && (
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <input type="checkbox" checked={usingFreighter} onChange={(e) => setUsingFreighter(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={usingFreighter}
+                onChange={(e) => setUsingFreighter(e.target.checked)}
+              />
               {t('register.useFreighter')}
             </label>
             {usingFreighter ? (
@@ -209,8 +262,16 @@ export default function Register() {
             ) : null}
           </div>
         )}
-        {error && <p style={{ color: 'var(--color-status-error)', fontSize: '0.875rem' }}>{error}</p>}
-        <button type="submit" className="btn-primary" data-testid="register-submit" disabled={loading} style={{ padding: '0.8rem' }}>
+        {error && (
+          <p style={{ color: 'var(--color-status-error)', fontSize: '0.875rem' }}>{error}</p>
+        )}
+        <button
+          type="submit"
+          className="btn-primary"
+          data-testid="register-submit"
+          disabled={loading}
+          style={{ padding: '0.8rem' }}
+        >
           {loading ? t('register.loading') : t('common.signUp')}
         </button>
       </form>

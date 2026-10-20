@@ -81,7 +81,13 @@ describe('api transport', () => {
 
   it('handles server error with structured error body', async () => {
     mockFetch(
-      { error: { message: 'Invalid field value', code: 'INVALID_INPUT', fields: { amount: 'Must be positive' } } },
+      {
+        error: {
+          message: 'Invalid field value',
+          code: 'INVALID_INPUT',
+          fields: { amount: 'Must be positive' },
+        },
+      },
       { status: 400, ok: false }
     );
 

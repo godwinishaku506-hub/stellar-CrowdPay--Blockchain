@@ -156,46 +156,97 @@ export default function Profile() {
 
   return (
     <main className="container page-narrow" style={{ paddingTop: '3rem', paddingBottom: '4rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1.5rem',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+        }}
+      >
         <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>Account Settings</h1>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Link to="/developer" className="btn-secondary" style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem', minHeight: 'auto', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+          <Link
+            to="/developer"
+            className="btn-secondary"
+            style={{
+              fontSize: '0.85rem',
+              padding: '0.4rem 0.8rem',
+              minHeight: 'auto',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+            }}
+          >
             Developer API
           </Link>
-          <Link to="/dashboard" className="btn-secondary" style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem', minHeight: 'auto', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+          <Link
+            to="/dashboard"
+            className="btn-secondary"
+            style={{
+              fontSize: '0.85rem',
+              padding: '0.4rem 0.8rem',
+              minHeight: 'auto',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+            }}
+          >
             Dashboard
           </Link>
         </div>
       </div>
-      
+
       {/* Account Details */}
       <div className="campaign-card" style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1rem' }}>Display Profile</h2>
-        
-        {error && <p className="alert alert--error" style={{ marginBottom: '1rem' }}>{error}</p>}
-        {success && <p className="alert alert--success" style={{ marginBottom: '1rem' }}>{success}</p>}
-        
+        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1rem' }}>
+          Display Profile
+        </h2>
+
+        {error && (
+          <p className="alert alert--error" style={{ marginBottom: '1rem' }}>
+            {error}
+          </p>
+        )}
+        {success && (
+          <p className="alert alert--success" style={{ marginBottom: '1rem' }}>
+            {success}
+          </p>
+        )}
+
         <form onSubmit={handleSaveName}>
           <div className="form-stack" style={{ marginBottom: '1.25rem' }}>
-            <label htmlFor="profile-name" className="label-strong">Display name</label>
-            <input 
-              id="profile-name" 
-              value={name} 
-              onChange={(e) => setName(e.target.value)} 
+            <label htmlFor="profile-name" className="label-strong">
+              Display name
+            </label>
+            <input
+              id="profile-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               placeholder="Your display name"
             />
           </div>
-          
+
           <div className="form-stack" style={{ marginBottom: '1.5rem' }}>
             <label className="label-strong">Member since</label>
-            <input 
-              value={user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'} 
-              disabled 
-              style={{ background: 'var(--color-surface)', color: 'var(--color-text-secondary)', cursor: 'not-allowed' }} 
+            <input
+              value={user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+              disabled
+              style={{
+                background: 'var(--color-surface)',
+                color: 'var(--color-text-secondary)',
+                cursor: 'not-allowed',
+              }}
             />
           </div>
-          
-          <button type="submit" className="btn-primary" disabled={saving || !name.trim() || name === user.name}>
+
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={saving || !name.trim() || name === user.name}
+          >
             {saving ? 'Saving…' : 'Save display name'}
           </button>
         </form>
@@ -203,13 +254,25 @@ export default function Profile() {
 
       {/* Email Settings */}
       <div className="campaign-card" style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1rem' }}>Email Address</h2>
-        {emailError && <p className="alert alert--error" style={{ marginBottom: '1rem' }}>{emailError}</p>}
-        {emailSuccess && <p className="alert alert--success" style={{ marginBottom: '1rem' }}>{emailSuccess}</p>}
+        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1rem' }}>
+          Email Address
+        </h2>
+        {emailError && (
+          <p className="alert alert--error" style={{ marginBottom: '1rem' }}>
+            {emailError}
+          </p>
+        )}
+        {emailSuccess && (
+          <p className="alert alert--success" style={{ marginBottom: '1rem' }}>
+            {emailSuccess}
+          </p>
+        )}
 
         <form onSubmit={handleSaveEmail}>
           <div className="form-stack" style={{ marginBottom: '1.25rem' }}>
-            <label htmlFor="profile-email" className="label-strong">Account email</label>
+            <label htmlFor="profile-email" className="label-strong">
+              Account email
+            </label>
             <input
               id="profile-email"
               type="email"
@@ -218,7 +281,11 @@ export default function Profile() {
               placeholder="your@email.com"
             />
           </div>
-          <button type="submit" className="btn-primary" disabled={emailSaving || !newEmail.trim() || newEmail === user.email}>
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={emailSaving || !newEmail.trim() || newEmail === user.email}
+          >
             {emailSaving ? 'Updating…' : 'Update email address'}
           </button>
         </form>
@@ -226,13 +293,25 @@ export default function Profile() {
 
       {/* Change Password */}
       <div className="campaign-card" style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1rem' }}>Change Password</h2>
-        {passwordError && <p className="alert alert--error" style={{ marginBottom: '1rem' }}>{passwordError}</p>}
-        {passwordSuccess && <p className="alert alert--success" style={{ marginBottom: '1rem' }}>{passwordSuccess}</p>}
+        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1rem' }}>
+          Change Password
+        </h2>
+        {passwordError && (
+          <p className="alert alert--error" style={{ marginBottom: '1rem' }}>
+            {passwordError}
+          </p>
+        )}
+        {passwordSuccess && (
+          <p className="alert alert--success" style={{ marginBottom: '1rem' }}>
+            {passwordSuccess}
+          </p>
+        )}
 
         <form onSubmit={handleChangePassword}>
           <div className="form-stack" style={{ marginBottom: '1rem' }}>
-            <label htmlFor="current-password" className="label-strong">Current password</label>
+            <label htmlFor="current-password" className="label-strong">
+              Current password
+            </label>
             <input
               id="current-password"
               type="password"
@@ -243,7 +322,9 @@ export default function Profile() {
           </div>
 
           <div className="form-stack" style={{ marginBottom: '1rem' }}>
-            <label htmlFor="new-password" className="label-strong">New password</label>
+            <label htmlFor="new-password" className="label-strong">
+              New password
+            </label>
             <input
               id="new-password"
               type="password"
@@ -254,7 +335,9 @@ export default function Profile() {
           </div>
 
           <div className="form-stack" style={{ marginBottom: '1.25rem' }}>
-            <label htmlFor="confirm-password" className="label-strong">Confirm new password</label>
+            <label htmlFor="confirm-password" className="label-strong">
+              Confirm new password
+            </label>
             <input
               id="confirm-password"
               type="password"
@@ -264,7 +347,11 @@ export default function Profile() {
             />
           </div>
 
-          <button type="submit" className="btn-primary" disabled={passwordSaving || !currentPassword || !newPassword}>
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={passwordSaving || !currentPassword || !newPassword}
+          >
             {passwordSaving ? 'Updating…' : 'Change password'}
           </button>
         </form>
@@ -272,15 +359,25 @@ export default function Profile() {
 
       {/* Notification Preferences */}
       <div className="campaign-card" style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.5rem' }}>Notification Preferences</h2>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+          Notification Preferences
+        </h2>
+        <p
+          style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}
+        >
           Manage which email and platform notifications you receive.
         </p>
 
-        {notifSuccess && <p className="alert alert--success" style={{ marginBottom: '1rem' }}>{notifSuccess}</p>}
+        {notifSuccess && (
+          <p className="alert alert--success" style={{ marginBottom: '1rem' }}>
+            {notifSuccess}
+          </p>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+          <label
+            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
+          >
             <input
               type="checkbox"
               checked={notifications.contributions}
@@ -288,11 +385,15 @@ export default function Profile() {
             />
             <div>
               <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Contribution receipts</div>
-              <div style={{ color: 'var(--color-text-hint)', fontSize: '0.8rem' }}>Receive email confirmations when you make or receive contributions.</div>
+              <div style={{ color: 'var(--color-text-hint)', fontSize: '0.8rem' }}>
+                Receive email confirmations when you make or receive contributions.
+              </div>
             </div>
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+          <label
+            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
+          >
             <input
               type="checkbox"
               checked={notifications.milestones}
@@ -300,11 +401,15 @@ export default function Profile() {
             />
             <div>
               <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Milestone progress</div>
-              <div style={{ color: 'var(--color-text-hint)', fontSize: '0.8rem' }}>Alerts when project milestones are submitted, approved, or released.</div>
+              <div style={{ color: 'var(--color-text-hint)', fontSize: '0.8rem' }}>
+                Alerts when project milestones are submitted, approved, or released.
+              </div>
             </div>
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+          <label
+            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
+          >
             <input
               type="checkbox"
               checked={notifications.campaignUpdates}
@@ -312,11 +417,15 @@ export default function Profile() {
             />
             <div>
               <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Campaign updates</div>
-              <div style={{ color: 'var(--color-text-hint)', fontSize: '0.8rem' }}>Newsletters and creator updates for campaigns you follow or back.</div>
+              <div style={{ color: 'var(--color-text-hint)', fontSize: '0.8rem' }}>
+                Newsletters and creator updates for campaigns you follow or back.
+              </div>
             </div>
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+          <label
+            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
+          >
             <input
               type="checkbox"
               checked={notifications.securityAlerts}
@@ -324,7 +433,9 @@ export default function Profile() {
             />
             <div>
               <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Security alerts</div>
-              <div style={{ color: 'var(--color-text-hint)', fontSize: '0.8rem' }}>Important notifications regarding your account access and keys.</div>
+              <div style={{ color: 'var(--color-text-hint)', fontSize: '0.8rem' }}>
+                Important notifications regarding your account access and keys.
+              </div>
             </div>
           </label>
         </div>
@@ -332,23 +443,40 @@ export default function Profile() {
 
       {/* Stellar Wallet */}
       <div className="campaign-card">
-        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.5rem' }}>Your Stellar wallet</h2>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+          Your Stellar wallet
+        </h2>
+        <p
+          style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}
+        >
           This is a custodial wallet managed by CrowdPay.
         </p>
-        
-        <div style={{ background: 'var(--color-surface)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+
+        <div
+          style={{
+            background: 'var(--color-surface)',
+            padding: '1rem',
+            borderRadius: '8px',
+            marginBottom: '1rem',
+          }}
+        >
           <code style={{ wordBreak: 'break-all', color: 'var(--color-text-primary)' }}>
             {user.wallet_public_key}
           </code>
         </div>
-        
+
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button type="button" className="btn-secondary" onClick={handleCopy}>
             {copied ? 'Copied!' : 'Copy address'}
           </button>
           {typeof stellarExpertAccountUrl === 'function' && (
-            <a href={stellarExpertAccountUrl(user.wallet_public_key)} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}>
+            <a
+              href={stellarExpertAccountUrl(user.wallet_public_key)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
+            >
               View on Stellar Expert ↗
             </a>
           )}
