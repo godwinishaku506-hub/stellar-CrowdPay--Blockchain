@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { stellarExpertAccountUrl } from '../config/stellar';
 
@@ -8,6 +8,7 @@ const BASE_URL = import.meta.env.VITE_API_URL || `${API_BASE_URL}/api`;
 
 export default function Profile() {
   const { user, token, ready, updateUser } = useAuth();
+  const location = useLocation();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -29,7 +30,13 @@ export default function Profile() {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: location.pathname + location.search }}
+      />
+    );
   }
 
   const handleSave = async (e) => {

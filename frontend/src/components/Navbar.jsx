@@ -6,7 +6,8 @@ import { api } from '../services/api';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const language = (i18n.resolvedLanguage || i18n.language || 'en').split('-')[0];
@@ -100,7 +101,12 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link to="/login" style={styles.link} aria-current={pathname === '/login' ? 'page' : undefined}>
+              <Link
+                to="/login"
+                state={{ from: location.pathname + location.search }}
+                style={styles.link}
+                aria-current={pathname === '/login' ? 'page' : undefined}
+              >
                 {t('nav.login')}
               </Link>
               <Link to="/register" aria-current={pathname === '/register' ? 'page' : undefined}>
