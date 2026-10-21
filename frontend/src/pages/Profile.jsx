@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { stellarExpertAccountUrl } from '../config/stellar';
@@ -44,12 +44,29 @@ export default function Profile() {
   });
   const [notifSuccess, setNotifSuccess] = useState('');
 
+  // Track timeout IDs so they can be cleared on unmount
+  const timeoutRefs = useRef([]);
+  const clearTimeouts = () => {
+    timeoutRefs.current.forEach((id) => clearTimeout(id));
+    timeoutRefs.current = [];
+  };
+  const setTimedSuccess = (setter, value, ms) => {
+    setter(value);
+    const id = setTimeout(() => setter(''), ms);
+    timeoutRefs.current.push(id);
+  };
+
   useEffect(() => {
     if (user) {
       setName(user.name || '');
       setNewEmail(user.email || '');
     }
+    return clearTimeouts;
   }, [user]);
+
+  useEffect(() => {
+    return clearTimeouts;
+  }, []);
 
   if (!ready) {
     return (
@@ -75,8 +92,7 @@ export default function Profile() {
     try {
       const updatedUser = await api.updateMe({ name: name.trim() });
       if (updateUser) updateUser(updatedUser);
-      setSuccess('Profile updated successfully');
-      setTimeout(() => setSuccess(''), 3000);
+      setTimedSuccess(setSuccess, 'Profile updated successfully', 3000);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -86,7 +102,8 @@ export default function Profile() {
 
   const handleSaveEmail = async (e) => {
     e.preventDefault();
-    if (!newEmail.trim() || !newEmail.includes('@')) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!newEmail.trim() || !emailRegex.test(newEmail.trim())) {
       setEmailError('Please enter a valid email address');
       return;
     }
@@ -96,8 +113,7 @@ export default function Profile() {
     try {
       const updatedUser = await api.updateMe({ email: newEmail.trim() });
       if (updateUser) updateUser(updatedUser);
-      setEmailSuccess('Email address updated successfully');
-      setTimeout(() => setEmailSuccess(''), 3000);
+      setTimedSuccess(setEmailSuccess, 'Email address updated successfully', 3000);
     } catch (err) {
       setEmailError(err.message || 'Failed to update email address');
     } finally {
@@ -128,7 +144,7 @@ export default function Profile() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      setTimeout(() => setPasswordSuccess(''), 3000);
+      setTimedSuccess(setPasswordSuccess, '', 3000);
     } catch (err) {
       setPasswordError(err.message || 'Failed to change password');
     } finally {
@@ -136,15 +152,16 @@ export default function Profile() {
     }
   };
 
-  const handleToggleNotification = (key) => {
+  const handleToggleNotification = async (key) => {
     const updated = { ...notifications, [key]: !notifications[key] };
     setNotifications(updated);
     try {
       localStorage.setItem('cp_notification_preferences', JSON.stringify(updated));
+      await api.updateMe({ notification_preferences: updated });
       setNotifSuccess('Notification preferences saved');
-      setTimeout(() => setNotifSuccess(''), 2500);
+      setTimedSuccess(setNotifSuccess, '', 2500);
     } catch {
-      // ignore storage errors
+      // ignore storage/api errors
     }
   };
 
