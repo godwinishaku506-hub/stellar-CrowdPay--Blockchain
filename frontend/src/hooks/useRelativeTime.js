@@ -9,20 +9,39 @@ function getRelative(date) {
   const abs = Math.abs(seconds);
   const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
-  if (abs < 60)     return rtf.format(Math.round(seconds), 'second');
-  if (abs < 3600)   return rtf.format(Math.round(seconds / 60), 'minute');
-  if (abs < 86400)  return rtf.format(Math.round(seconds / 3600), 'hour');
+  if (abs < 60) return rtf.format(Math.round(seconds), 'second');
+  if (abs < 3600) return rtf.format(Math.round(seconds / 60), 'minute');
+  if (abs < 86400) return rtf.format(Math.round(seconds / 3600), 'hour');
   if (abs < 604800) return rtf.format(Math.round(seconds / 86400), 'day');
   // Fall back to absolute date for older events
   return dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+const subscribers = new Set();
+let sharedTimer = null;
+
+function subscribe(callback) {
+  subscribers.add(callback);
+  if (sharedTimer === null) {
+    sharedTimer = setInterval(() => {
+      subscribers.forEach((subscriber) => subscriber());
+    }, 30_000);
+  }
+
+  return () => {
+    subscribers.delete(callback);
+    if (subscribers.size === 0 && sharedTimer !== null) {
+      clearInterval(sharedTimer);
+      sharedTimer = null;
+    }
+  };
 }
 
 export function useRelativeTime(date) {
   const [label, setLabel] = useState(() => getRelative(date));
   useEffect(() => {
     setLabel(getRelative(date));
-    const id = setInterval(() => setLabel(getRelative(date)), 30_000);
-    return () => clearInterval(id);
+    return subscribe(() => setLabel(getRelative(date)));
   }, [date]);
   return label;
 }

@@ -23,10 +23,39 @@ export default function Navbar() {
       setNotifications([]);
       return;
     }
+
+    let intervalId = null;
     const fetchNotifs = () => api.getNotifications().then(setNotifications).catch(() => {});
-    fetchNotifs();
-    const id = setInterval(fetchNotifs, 30_000);
-    return () => clearInterval(id);
+
+    const startPolling = () => {
+      if (intervalId !== null) return;
+      fetchNotifs();
+      intervalId = setInterval(fetchNotifs, 30_000);
+    };
+
+    const stopPolling = () => {
+      if (intervalId === null) return;
+      clearInterval(intervalId);
+      intervalId = null;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    if (document.visibilityState === 'visible') {
+      startPolling();
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [user]);
 
   // Close dropdown when clicking outside
