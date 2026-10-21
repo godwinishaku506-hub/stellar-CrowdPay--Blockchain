@@ -317,14 +317,17 @@ function startCampaignStatusCron() {
 
 function startReconciliationCron() {
   if (process.env.ENABLE_RECONCILIATION_CRON === 'false') return;
-  const cron = require('node-cron');
-  const { reconcileCampaignBalances } = require('./services/reconciliation');
-  cron.schedule('*/15 * * * *', () => {
-    reconcileCampaignBalances().catch((err) => {
-      logger.error('Reconciliation cron failed', { error: err.message });
+  const { runReconciliation, getReconcileConfig } = require('./services/reconciliation');
+  const { intervalMs, batchSize } = getReconcileConfig();
+  // Incremental (only changed campaigns, RECONCILE_BATCH_SIZE per run) and
+  // guarded against overlapping runs inside runReconciliation.
+  const timer = setInterval(() => {
+    runReconciliation().catch((err) => {
+      logger.error('Reconciliation run failed', { error: err.message });
     });
-  });
-  logger.info('Reconciliation cron scheduled (every 15 minutes)');
+  }, intervalMs);
+  if (typeof timer.unref === 'function') timer.unref();
+  logger.info('Reconciliation scheduled', { interval_ms: intervalMs, batch_size: batchSize });
 }
 
 async function bootstrap() {

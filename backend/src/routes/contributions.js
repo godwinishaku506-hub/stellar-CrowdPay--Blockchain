@@ -36,6 +36,7 @@ const {
 } = require('../services/contributionService');
 const { listUserContributions } = require('../services/userDashboardService');
 const asyncHandler = require('../utils/asyncHandler');
+const { findVisibleCampaign } = require('../utils/campaignVisibility');
 const { parseAmountToStroops, formatStroops } = require('../utils/amounts');
 
 const SUPPORTED_ASSETS = getSupportedAssetCodes();
@@ -174,6 +175,10 @@ router.get('/mine', requireAuth, asyncHandler(async (req, res) => {
 
 // Get contributions for a campaign (public endpoint — sensitive fields are redacted for unauthenticated/unauthorised callers)
 router.get('/campaign/:campaignId', publicContributionReadLimiter, optionalAuth, async (req, res) => {
+  // A soft-deleted campaign's backer wall (contributor data) is not public.
+  if (!(await findVisibleCampaign(db, req.params.campaignId))) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
   const offset = Math.max(parseInt(req.query.offset) || 0, 0);
 

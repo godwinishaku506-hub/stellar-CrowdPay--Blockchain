@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { Keypair } = require('@stellar/stellar-sdk');
 const db = require('../config/database');
+const { findVisibleCampaign } = require('../utils/campaignVisibility');
 const logger = require('../config/logger');
 const { requireAuth } = require('../middleware/auth');
 const { idempotency } = require('../middleware/idempotency');
@@ -121,6 +122,9 @@ async function setCampaignStatusFromMilestoneProgress(client, campaignId) {
  *                 $ref: '#/components/schemas/Milestone'
  */
 router.get('/campaign/:campaignId', async (req, res) => {
+  if (!(await findVisibleCampaign(db, req.params.campaignId))) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
   const { rows } = await db.query(
     `SELECT m.*, 
             (c.milestones_contract_id IS NOT NULL AND c.soroban_status = 'verified') AS on_chain

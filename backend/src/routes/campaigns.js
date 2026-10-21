@@ -1,5 +1,6 @@
 const express = require('express');
 const router = require('express').Router();
+const { NOT_DELETED, findVisibleCampaign } = require('../utils/campaignVisibility');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const db = require('../config/database');
@@ -333,6 +334,9 @@ router.get('/mine', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 router.get('/:id/milestones', asyncHandler(async (req, res) => {
+  if (!(await findVisibleCampaign(db, req.params.id))) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
   const { rows } = await db.query(
     `SELECT m.*, (c.milestones_contract_id IS NOT NULL AND c.soroban_status = 'verified') AS on_chain
      FROM milestones m
@@ -528,7 +532,7 @@ router.get('/:id/embed', asyncHandler(async (req, res) => {
   const { rows } = await db.query(
     `SELECT id, title, description, target_amount, raised_amount, asset_type, status,
             (SELECT COUNT(*)::int FROM contributions c WHERE c.campaign_id = campaigns.id) AS backer_count
-     FROM campaigns WHERE id = $1`,
+     FROM campaigns WHERE id = $1 AND ${NOT_DELETED}`,
     [campaignId]
   );
   if (!rows.length) return res.status(404).json({ error: 'Campaign not found' });
@@ -556,7 +560,7 @@ router.get('/:id/embed', asyncHandler(async (req, res) => {
 router.get('/:id/backers', publicReadLimiter, optionalAuth, asyncHandler(async (req, res) => {
   const campaignId = req.params.id;
   const { rows: campaignRows } = await db.query(
-    'SELECT show_backer_amounts, creator_id FROM campaigns WHERE id = $1',
+    `SELECT show_backer_amounts, creator_id FROM campaigns WHERE id = $1 AND ${NOT_DELETED}`,
     [campaignId]
   );
   if (!campaignRows.length) return res.status(404).json({ error: 'Campaign not found' });
@@ -609,7 +613,7 @@ router.get('/:id/backers', publicReadLimiter, optionalAuth, asyncHandler(async (
 // SSE stream for real-time campaign funding updates
 router.get('/:id/stream', asyncHandler(async (req, res) => {
   const campaignId = parseInt(req.params.id, 10);
-  const { rows } = await db.query('SELECT id FROM campaigns WHERE id = $1', [campaignId]);
+  const { rows } = await db.query(`SELECT id FROM campaigns WHERE id = $1 AND ${NOT_DELETED}`, [campaignId]);
   if (!rows.length) return res.status(404).json({ error: 'Campaign not found' });
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -665,7 +669,7 @@ router.get('/:id/balance', asyncHandler(async (req, res) => {
    *         description: Campaign not found
    */
   const { rows } = await db.query(
-    'SELECT wallet_public_key FROM campaigns WHERE id = $1',
+    `SELECT wallet_public_key FROM campaigns WHERE id = $1 AND ${NOT_DELETED}`,
     [req.params.id]
   );
   if (!rows.length) return res.status(404).json({ error: 'Campaign not found' });
@@ -1269,7 +1273,7 @@ router.post('/:id/members/accept', requireAuth, asyncHandler(async (req, res) =>
 
 // GET /campaigns/:id/analytics — campaign analytics
 router.get('/:id/analytics', requireAuth, asyncHandler(async (req, res) => {
-  const { rows: owner } = await db.query('SELECT creator_id FROM campaigns WHERE id = $1', [req.params.id]);
+  const { rows: owner } = await db.query(`SELECT creator_id FROM campaigns WHERE id = $1 AND ${NOT_DELETED}`, [req.params.id]);
   if (!owner.length) return res.status(404).json({ error: 'Campaign not found' });
   if (owner[0].creator_id !== req.user.userId && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Not authorized to view analytics' });

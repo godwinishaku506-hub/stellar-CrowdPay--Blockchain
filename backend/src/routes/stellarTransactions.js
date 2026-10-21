@@ -2,6 +2,7 @@ const router = require('express').Router();
 const db = require('../config/database');
 const { requireAuth } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
+const { NOT_DELETED, notDeleted } = require('../utils/campaignVisibility');
 
 function isPlatformApprover(userId) {
   if (!process.env.PLATFORM_APPROVER_USER_ID) return false;
@@ -9,7 +10,7 @@ function isPlatformApprover(userId) {
 }
 
 async function assertCampaignReportingAccess(req, campaignId) {
-  const { rows } = await db.query('SELECT creator_id FROM campaigns WHERE id = $1', [campaignId]);
+  const { rows } = await db.query(`SELECT creator_id FROM campaigns WHERE id = $1 AND ${NOT_DELETED}`, [campaignId]);
   if (!rows.length) return { error: 'Campaign not found', status: 404 };
   const isCreator = rows[0].creator_id === req.user.userId;
   if (!isCreator && !isPlatformApprover(req.user.userId)) {
@@ -35,7 +36,7 @@ router.get('/', requireAuth, asyncHandler(async (req, res) => {
   }
 
   const params = [];
-  let where = 'WHERE 1=1';
+  let where = `WHERE ${notDeleted('c')}`;
   if (campaignId) {
     params.push(campaignId);
     where += ` AND st.campaign_id = $${params.length}`;
@@ -71,7 +72,7 @@ router.get('/:id', requireAuth, asyncHandler(async (req, res) => {
     `SELECT st.*, c.title AS campaign_title, c.creator_id
      FROM stellar_transactions st
      JOIN campaigns c ON c.id = st.campaign_id
-     WHERE st.id = $1`,
+     WHERE st.id = $1 AND ${notDeleted('c')}`,
     [req.params.id]
   );
   if (!rows.length) return res.status(404).json({ error: 'Record not found' });

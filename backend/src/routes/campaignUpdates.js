@@ -1,11 +1,22 @@
 const router = require("express").Router();
 const sanitizeHtml = require("sanitize-html");
 const db = require("../config/database");
+const { NOT_DELETED, findVisibleCampaign } = require("../utils/campaignVisibility");
 const { requireAuth } = require("../middleware/auth");
 const asyncHandler = require("../utils/asyncHandler");
+const {
+  campaignUpdateCreateValidation,
+  campaignUpdateEditValidation,
+  campaignUpdateDeleteValidation,
+  validateRequestUnprocessable,
+} = require("../middleware/requestSchemas");
 
 const MAX_BODY_LENGTH = 20000;
 const MAX_TITLE_LENGTH = 200;
+
+// Per-route JSON limit: a 20,000-character body can be up to ~80 KB as UTF-8.
+// (Was referenced but never defined, so this module failed to load.)
+const updateBodyParser = require("express").json({ limit: "100kb" });
 
 const SANITIZE_OPTIONS = {
   allowedTags: [
@@ -70,7 +81,7 @@ async function requireCampaignCreator(req, res, next) {
   const campaignId = req.params.id;
 
   const { rows } = await db.query(
-    "SELECT id, creator_id FROM campaigns WHERE id = $1",
+    `SELECT id, creator_id FROM campaigns WHERE id = $1 AND ${NOT_DELETED}`,
     [campaignId],
   );
 
@@ -92,6 +103,9 @@ async function requireCampaignCreator(req, res, next) {
 router.get(
   "/:id/updates",
   asyncHandler(async (req, res) => {
+    if (!(await findVisibleCampaign(db, req.params.id))) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
     const { rows } = await db.query(
       `SELECT cu.id,
             cu.campaign_id,
@@ -117,6 +131,8 @@ router.post(
   "/:id/updates",
   requireAuth,
   updateBodyParser,
+  campaignUpdateCreateValidation,
+  validateRequestUnprocessable,
   requireCampaignCreator,
   asyncHandler(async (req, res) => {
     const rawTitle = String(req.body.title ?? "");
@@ -155,6 +171,8 @@ router.patch(
   "/:id/updates/:updateId",
   requireAuth,
   updateBodyParser,
+  campaignUpdateEditValidation,
+  validateRequestUnprocessable,
   requireCampaignCreator,
   asyncHandler(async (req, res) => {
     const rawTitle = String(req.body.title ?? "");
@@ -204,6 +222,8 @@ router.patch(
 router.delete(
   "/:id/updates/:updateId",
   requireAuth,
+  campaignUpdateDeleteValidation,
+  validateRequestUnprocessable,
   requireCampaignCreator,
   asyncHandler(async (req, res) => {
     const { rowCount } = await db.query(

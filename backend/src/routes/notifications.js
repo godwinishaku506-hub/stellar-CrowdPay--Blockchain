@@ -3,8 +3,13 @@ const db = require('../config/database');
 const { requireAuth } = require('../middleware/auth');
 const {
   getNotificationPreferences,
-  updateNotificationPreferences,
+  upsertNotificationPreferences,
 } = require('../services/notifications');
+const {
+  notificationIdValidation,
+  notificationPreferencesValidation,
+  validateRequestBadRequest,
+} = require('../middleware/requestSchemas');
 
 /**
  * @openapi
@@ -136,8 +141,10 @@ router.get('/preferences', requireAuth, async (req, res) => {
   res.json(prefs);
 });
 
-router.put('/preferences', requireAuth, async (req, res) => {
-  const prefs = await updateNotificationPreferences(req.user.userId, req.body || {});
+router.put('/preferences', requireAuth, notificationPreferencesValidation, validateRequestBadRequest, async (req, res) => {
+  // The service exports upsertNotificationPreferences; the old import name
+  // did not exist, so this endpoint always threw.
+  const prefs = await upsertNotificationPreferences(req.user.userId, req.body);
   res.json(prefs);
 });
 
@@ -172,7 +179,7 @@ router.put('/preferences', requireAuth, async (req, res) => {
  *       404:
  *         description: Notification not found
  */
-router.patch('/:id/read', requireAuth, async (req, res) => {
+router.patch('/:id/read', requireAuth, notificationIdValidation, validateRequestBadRequest, async (req, res) => {
   const { rows } = await db.query(
     `UPDATE notifications SET read_at = NOW()
      WHERE id = $1 AND user_id = $2 AND read_at IS NULL

@@ -44,6 +44,16 @@ function buildApp({
     '../services/ledgerMonitor': {
       watchCampaignWallet: async () => {},
     },
+    // Real validation rules, minus the Stellar service they import for asset codes.
+    '../middleware/validation': proxyquire('../middleware/validation', {
+      '../services/stellarService': { getSupportedAssetCodes: () => ['XLM', 'USDC'] },
+    }),
+    // Real module pulls in Soroban RPC / circuit-breaker config; not under test here.
+    '../services/sorobanService': {
+      provisionCampaignContracts: async () => ({}),
+      isValidContractId: (id) => /^C[A-Z2-7]{55}$/.test(String(id)),
+      isSorobanEnabled: () => false,
+    },
     '../services/stellarTransactionService': {
       insertWithdrawalPendingSignatures: insertWithdrawalPendingSignaturesImpl,
     },
@@ -619,4 +629,31 @@ test('POST /campaigns/:id/members/accept returns 404 for invalid token', async (
     .send({ token: 'nosuchtoken' });
 
   assert.equal(response.status, 404);
+});
+
+// ---- soft-deleted campaigns ---------------------------------------------------
+
+test('a soft-deleted campaign 404s on its secondary endpoints', async () => {
+  const DELETED_ID = '3f2b8c1e-1d2a-4b3c-9d4e-5f6a7b8c9d0e';
+  // Only hides the campaign when the query filters on deleted_at.
+  const queryImpl = async (text) => {
+    if (/FROM campaigns\b/.test(text) || /JOIN campaigns c\b/.test(text)) {
+      if (/deleted_at IS NULL/.test(text)) return { rows: [] };
+      return { rows: [{ id: DELETED_ID, creator_id: 'platform-1', show_backer_amounts: true, wallet_public_key: 'G', deleted_at: new Date() }] };
+    }
+    return { rows: [{ id: 'm1', sender_public_key: 'GPII', amount: '5' }] };
+  };
+  const app = buildApp({ queryImpl });
+
+  for (const path of [
+    `/api/campaigns/${DELETED_ID}`,
+    `/api/campaigns/${DELETED_ID}/backers`,
+    `/api/campaigns/${DELETED_ID}/milestones`,
+    `/api/campaigns/${DELETED_ID}/balance`,
+    `/api/campaigns/${DELETED_ID}/analytics`,
+  ]) {
+    const res = await request(app).get(path);
+    assert.equal(res.status, 404, `${path} -> ${res.status}`);
+    assert.ok(!JSON.stringify(res.body).includes('GPII'), path);
+  }
 });
