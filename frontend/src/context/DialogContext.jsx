@@ -7,6 +7,16 @@ const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:
 
 export function DialogProvider({ children }) {
   const { t } = useTranslation();
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import * as Sentry from '@sentry/react';
+
+const DialogContext = createContext(null);
+
+function logInteraction(message, data) {
+  Sentry.addBreadcrumb({ category: 'ui.dialog', level: 'info', message, data });
+}
+
+export function DialogProvider({ children }) {
   const [dialog, setDialog] = useState(null);
   const [value, setValue] = useState('');
   const restoreRef = useRef(null);
@@ -21,84 +31,39 @@ export function DialogProvider({ children }) {
   }, []);
 
   const close = useCallback((result) => {
-    setDialog((current) => {
-      if (current) current.resolve(result);
+    setDialog((d) => {
+      if (d) {
+        logInteraction(d.options.action || d.message, {
+          kind: d.kind,
+          confirmed: result !== null && result !== false,
+        });
+        d.resolve(result);
+      }
       return null;
     });
     restoreRef.current?.focus?.();
   }, []);
 
-  const confirm = useCallback((message, options) => open('confirm', message, options), [open]);
-  const prompt = useCallback((message, options) => open('prompt', message, options), [open]);
-  const alert = useCallback((message, options) => open('alert', message, options), [open]);
-
-  // Memoised so consumers only re-render when the dialog state actually changes.
-  const api = useMemo(() => ({ confirm, prompt, alert }), [confirm, prompt, alert]);
-
   useEffect(() => {
-    if (!dialog) return undefined;
-
-    const node = dialogRef.current;
-    const initial =
-      dialog.kind === 'prompt'
-        ? node?.querySelector('input, textarea') || node?.querySelector(FOCUSABLE_SELECTOR)
-        : confirmBtnRef.current || node?.querySelector(FOCUSABLE_SELECTOR);
-    initial?.focus();
-
-    function trapTab(e) {
-      if (e.key !== 'Tab') return;
-      const modal = dialogRef.current;
-      if (!modal) return;
-      const focusable = Array.from(modal.querySelectorAll(FOCUSABLE_SELECTOR)).filter((el) => !el.disabled);
-      if (focusable.length === 0) {
-        e.preventDefault();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-      if (e.shiftKey) {
-        if (active === first || active === modal) {
-          e.preventDefault();
-          last.focus();
-        }
-      } else if (active === last || active === modal) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-
-    function onKey(e) {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        if (dialog.kind === 'prompt') close(null);
-        else if (dialog.kind === 'alert') close(true);
-        else close(false);
-        return;
-      }
-      if (e.key === 'Tab') trapTab(e);
-    }
-
+    if (!dialog) return;
+    (dialog.kind === 'prompt' ? inputRef.current : confirmBtnRef.current)?.focus();
+    const onKey = (e) => {
+      if (e.key === 'Escape') close(dialog.kind === 'prompt' ? null : false);
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [dialog, close]);
+
+  const api = {
+    confirm: (message, options) => open('confirm', message, options),
+    prompt: (message, options) => open('prompt', message, options),
+    alert: (message, options) => open('alert', message, options),
+  };
 
   function submit(e) {
     e.preventDefault();
     close(dialog.kind === 'prompt' ? value : true);
   }
-
-  function cancel() {
-    if (dialog.kind === 'prompt') close(null);
-    else if (dialog.kind === 'alert') close(true);
-    else close(false);
-  }
-
-  const confirmLabel =
-    dialog.kind === 'alert'
-      ? t('dialog.ok')
-      : dialog.options?.confirmLabel || (dialog.kind === 'prompt' ? t('dialog.promptConfirm') : t('dialog.confirm'));
-  const cancelLabel = dialog.options?.cancelLabel || t('common.cancel');
 
   return (
     <DialogContext.Provider value={api}>
@@ -115,15 +80,11 @@ export function DialogProvider({ children }) {
             justifyContent: 'center',
             zIndex: 300,
           }}
-          ref={dialogRef}
-          role={dialog.kind === 'alert' ? 'alertdialog' : 'dialog'}
-          aria-modal="true"
-          aria-labelledby="app-dialog-message"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) cancel();
-          }}
         >
           <form
+            role={dialog.kind === 'alert' ? 'alertdialog' : 'dialog'}
+            aria-modal="true"
+            aria-labelledby="app-dialog-message"
             onSubmit={submit}
             style={{
               background: 'var(--color-surface, #fff)',
@@ -141,7 +102,6 @@ export function DialogProvider({ children }) {
             </p>
             {dialog.kind === 'prompt' && (
               <input
-                id="app-dialog-input"
                 ref={inputRef}
                 aria-labelledby="app-dialog-message"
                 value={value}
@@ -150,12 +110,16 @@ export function DialogProvider({ children }) {
             )}
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
               {dialog.kind !== 'alert' && (
-                <button type="button" className="btn-secondary" onClick={cancel}>
-                  {cancelLabel}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => close(dialog.kind === 'prompt' ? null : false)}
+                >
+                  Cancel
                 </button>
               )}
               <button type="submit" className="btn-primary" ref={confirmBtnRef}>
-                {confirmLabel}
+                OK
               </button>
             </div>
           </form>

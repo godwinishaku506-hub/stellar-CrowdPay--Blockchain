@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import { getNetwork, signTransaction } from '@stellar/freighter-api';
 import { stellarExpertTxUrl } from '../config/stellar';
 import { useToast } from '../context/ToastContext';
+import { useDialog } from '../context/DialogContext';
 import RelativeTime from './RelativeTime';
 
 const ELIGIBLE = ['active', 'funded'];
@@ -19,8 +20,9 @@ function statusLabel(row, isExpired) {
   return row.status;
 }
 
-export default function WithdrawalsSection({ campaign, milestones = [], user, token, onReleased }) {
+export default function WithdrawalsSection({ campaign, milestones = [], user, onReleased }) {
   const toast = useToast();
+  const dialog = useDialog();
   const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -78,12 +80,12 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
   }, [canOpenRequest, campaign.id, campaign.asset_type]);
 
   const refresh = useCallback(async () => {
-    if (!token) return;
+    if (!user) return;
     setError('');
     try {
-      const caps = await api.getWithdrawalCapabilities(token);
+      const caps = await api.getWithdrawalCapabilities();
       setCap(caps);
-      const list = await api.listWithdrawals(campaign.id, token);
+      const list = await api.listWithdrawals(campaign.id);
       setRows(list);
       setForbidden(false);
     } catch (e) {
@@ -96,16 +98,16 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
     } finally {
       setLoading(false);
     }
-  }, [campaign.id, token]);
+  }, [campaign.id, user]);
 
   useEffect(() => {
-    if (!token) {
+    if (!user) {
       setLoading(false);
       return;
     }
     setLoading(true);
     refresh();
-  }, [token, refresh]);
+  }, [user, refresh]);
 
   async function loadEvents(id) {
     if (openAudit === id) {
@@ -117,7 +119,7 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
       return;
     }
     try {
-      const ev = await api.getWithdrawalEvents(id, token);
+      const ev = await api.getWithdrawalEvents(id);
       setEventsById((m) => ({ ...m, [id]: ev }));
       setOpenAudit(id);
     } catch (e) {
@@ -168,7 +170,7 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
     setBusyId(id);
     setError('');
     try {
-      const wr = await api.getWithdrawal(id, token);
+      const wr = await api.getWithdrawal(id);
       const unsignedXdr = wr.unsigned_xdr;
       if (!unsignedXdr) throw new Error('Missing unsigned transaction');
 
@@ -219,7 +221,7 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
     }
   }
 
-  if (!token || forbidden) return null;
+  if (!user || forbidden) return null;
   if (loading) {
     return (
       <section style={styles.section} aria-label="Fund release">
@@ -481,13 +483,29 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
                       type="button"
                       className="btn-secondary"
                       disabled={busyId === row.id}
-                      onClick={() =>
+                      onClick={async () => {
+                        const ok = await dialog.confirm({
+                          title: 'Cancel this withdrawal request?',
+                          danger: true,
+                          message:
+                            'The pending request will be cancelled and the unsigned transaction discarded. Nothing has been released yet; you can submit a new request afterwards.',
+                          summary: [
+                            {
+                              label: 'Amount',
+                              value: `${Number(row.amount).toLocaleString()} ${campaign.asset_type}`,
+                            },
+                            { label: 'Destination', value: row.destination_key, monospace: true },
+                          ],
+                          confirmLabel: 'Cancel request',
+                          cancelLabel: 'Keep request',
+                        });
+                        if (!ok) return;
                         runAction(
                           row.id,
                           () => api.cancelWithdrawal(row.id, { reason: 'Cancelled by creator' }),
                           'Withdrawal cancelled',
-                        )
-                      }
+                        );
+                      }}
                       style={{ fontSize: '0.8rem' }}
                     >
                       Cancel
@@ -603,13 +621,30 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
                             type="button"
                             className="btn-primary"
                             disabled={busyId === row.id}
-                            onClick={() =>
+                            onClick={async () => {
+                              const ok = await dialog.confirm({
+                                title: 'Approve & release funds on-chain?',
+                                danger: true,
+                                message:
+                                  'This signs the withdrawal with the platform key and submits the transaction to the Stellar network. Funds leave the campaign wallet immediately and the release is irreversible.',
+                                summary: [
+                                  {
+                                    label: 'Amount',
+                                    value: `${Number(row.amount).toLocaleString()} ${campaign.asset_type}`,
+                                  },
+                                  { label: 'Destination', value: row.destination_key, monospace: true },
+                                  { label: 'Request ID', value: row.id },
+                                ],
+                                confirmLabel: 'Approve & submit',
+                                cancelLabel: 'Back',
+                              });
+                              if (!ok) return;
                               runAction(
                                 row.id,
                                 () => api.approveWithdrawalPlatform(row.id),
                                 'Withdrawal approved',
-                              )
-                            }
+                              );
+                            }}
                             style={{ fontSize: '0.8rem' }}
                           >
                             {busyId === row.id ? 'Approving…' : 'Admin approve & submit'}
@@ -670,4 +705,4 @@ const styles = {
     color: 'var(--color-text-secondary)',
     lineHeight: 1.5,
   },
-};
+};

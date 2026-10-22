@@ -30,6 +30,7 @@ export default function App() {
       <AuthProvider>
         <DialogProvider>
         <ToastProvider>
+        <DialogProvider>
         {!hideNavbar && <Navbar />}
         <Routes>
           <Route path="/" element={<Home />} />
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/my-contributions" element={<Navigate to="/dashboard?tab=contributions" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </DialogProvider>
         </ToastProvider>
         </DialogProvider>
       </AuthProvider>
