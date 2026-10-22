@@ -78,7 +78,9 @@ async function request(method, path, body, options = {}) {
         await promise;
         return request(method, path, body, { ...options, _retry: true });
       } catch {
-        throw new Error("Session expired. Please log in again.");
+        const err = new Error("Session expired. Please log in again.");
+        err.status = res.status;
+        throw err;
       }
     }
   }
