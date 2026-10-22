@@ -493,15 +493,31 @@ function AuditLogQueue() {
 }
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
+  const { user, ready } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('campaigns');
 
   useEffect(() => {
+    if (!ready) return;
     if (!user || user.role !== 'admin') {
-      navigate('/');
+      navigate('/login', { state: { from: '/admin' }, replace: true });
     }
-  }, [user, navigate]);
+  }, [user, ready, navigate]);
+
+  if (!ready) {
+    return (
+      <div style={{ maxWidth: '860px', margin: '2rem auto', padding: '0 1rem' }}>
+        <p style={{ color: 'var(--color-text-hint)' }}>Restoring your session…</p>
+      </div>
+    );
+  }
+  if (!user || user.role !== 'admin') {
+    return (
+      <div style={{ maxWidth: '860px', margin: '2rem auto', padding: '0 1rem' }}>
+        <p style={{ color: 'var(--color-text-hint)' }}>Admins only — you are not authorised to view this page.</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: '860px', margin: '2rem auto', padding: '0 1rem' }}>
