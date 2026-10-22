@@ -335,6 +335,7 @@ export const api = {
   getAdminMilestones: (options = {}) => request('GET', '/admin/milestones', null, { query: options }),
   getAdminUsers: (include_banned = false) => request('GET', '/admin/users', null, { query: { include_banned: include_banned ? 'true' : 'false' } }),
   getAdminAuditLog: (options = {}) => request('GET', '/admin/audit-log', null, { query: options }),
+  getAdminDisputes: (options = {}) => request('GET', '/admin/disputes', null, { query: options }),
   updateCampaignStatus: (id, status) => request('PATCH', `/admin/campaigns/${id}/status`, { status }),
   adminSuspendCampaign: (id, body) => request('PATCH', `/admin/campaigns/${id}/suspend`, body),
   adminRestoreCampaign: (id) => request('PATCH', `/admin/campaigns/${id}/restore`, {}),

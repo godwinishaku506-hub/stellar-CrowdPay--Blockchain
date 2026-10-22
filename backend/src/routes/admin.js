@@ -1876,4 +1876,82 @@ router.get('/refund-queue', async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/disputes:
+ *   get:
+ *     tags:
+ *       - Admin
+ *     summary: List all disputes (admin only, paginated)
+ *     description: Returns a paginated list of disputes across all campaigns. Requires admin authentication.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Max number of disputes to return (default 50, max 200)
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *         description: Number of disputes to skip (default 0)
+ *     responses:
+ *       200:
+ *         description: Paginated list of disputes
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 disputes:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Dispute'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to fetch disputes
+ */
+router.get('/disputes', async (req, res) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+    const limitNum = Math.min(parseInt(limit) || 50, 200);
+    const offsetNum = parseInt(offset) || 0;
+
+    const { rows } = await db.query(
+      `SELECT d.*, u.name AS raised_by_name, u.email AS raised_by_email, c.title AS campaign_title
+       FROM disputes d
+       JOIN users u ON u.id = d.raised_by
+       JOIN campaigns c ON c.id = d.campaign_id
+       ORDER BY d.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limitNum, offsetNum]
+    );
+
+    const { rows: countRows } = await db.query('SELECT COUNT(*) FROM disputes');
+    const total = parseInt(countRows[0].count);
+
+    res.json({
+      disputes: rows,
+      pagination: { limit: limitNum, offset: offsetNum, total },
+    });
+  } catch (err) {
+    logger.error('Error fetching admin disputes', { error: err.message });
+    res.status(500).json({ error: 'Failed to fetch disputes' });
+  }
+});
+
 module.exports = router;

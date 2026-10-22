@@ -8,25 +8,28 @@ const DISPUTE_STATUSES = ['open', 'under_review', 'resolved_creator', 'resolved_
 
 function DisputeQueue() {
   const [disputes, setDisputes] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [page, setPage] = useState(0);
   const [busyId, setBusyId] = useState(null);
   const dialog = useDialog();
+  const LIMIT = 50;
 
   useEffect(() => {
-    // Load open/under_review disputes across all campaigns via admin endpoint
-    api.getAdminCampaigns()
-      .then(async (campaigns) => {
-        const all = await Promise.all(
-          campaigns.map((c) =>
-            api.getCampaignDisputes(c.id)
-              .then((ds) => ds.map((d) => ({ ...d, campaign_title: c.title })))
-              .catch(() => [])
-          )
-        );
-        setDisputes(all.flat().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+    setLoading(true);
+    setError(null);
+    api.getAdminDisputes({ limit: LIMIT, offset: page * LIMIT })
+      .then(({ disputes: rows, pagination }) => {
+        setDisputes(rows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+        setTotal(pagination?.total || 0);
+      })
+      .catch((err) => {
+        setError(err.message || 'Could not load disputes');
+        setDisputes([]);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [page]);
 
   async function resolve(dispute, status) {
     const note = await dialog.prompt(`Resolution note (${status}):`, { action: 'dispute.resolve' });
@@ -43,65 +46,94 @@ function DisputeQueue() {
   }
 
   if (loading) return <p style={{ color: 'var(--color-text-hint)' }}>Loading disputes…</p>;
+  if (error) return <p style={{ color: 'var(--color-danger-text, #dc2626)' }}>{error}</p>;
   if (!disputes.length) return <p style={{ color: 'var(--color-text-hint)', marginBottom: '2rem' }}>No disputes on record.</p>;
 
+  const pageCount = Math.ceil(total / LIMIT) || 1;
+
   return (
-    <div style={{ display: 'grid', gap: '0.9rem', marginBottom: '2.5rem' }}>
-      {disputes.map((d) => (
-        <div
-          key={d.id}
-          style={{
-            border: '1px solid var(--color-border-light)',
-            borderRadius: '12px',
-            padding: '1rem',
-            background: 'var(--color-bg)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <div>
-              <strong>{d.campaign_title}</strong>
-              <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: 'var(--color-text-hint)' }}>
-                #{d.id}
-              </span>
-            </div>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                padding: '0.2rem 0.6rem',
-                borderRadius: '999px',
-                background: 'var(--color-accent-soft, #ede9fe)',
-                color: 'var(--color-accent)',
-              }}
-            >
-              {d.status}
-            </span>
-          </div>
-
-          <p style={{ margin: '0.5rem 0', fontSize: '0.9rem' }}>{d.reason}</p>
-
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-            {DISPUTE_STATUSES.filter((s) => s !== d.status).map((s) => (
-              <button
-                key={s}
-                disabled={busyId === d.id}
-                onClick={() => resolve(d, s)}
+    <>
+      <div style={{ display: 'grid', gap: '0.9rem', marginBottom: '2.5rem' }}>
+        {disputes.map((d) => (
+          <div
+            key={d.id}
+            style={{
+              border: '1px solid var(--color-border-light)',
+              borderRadius: '12px',
+              padding: '1rem',
+              background: 'var(--color-bg)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <div>
+                <strong>{d.campaign_title}</strong>
+                <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: 'var(--color-text-hint)' }}>
+                  #{d.id}
+                </span>
+              </div>
+              <span
                 style={{
                   fontSize: '0.75rem',
-                  padding: '0.25rem 0.7rem',
-                  borderRadius: '6px',
-                  border: '1px solid var(--color-border-light)',
-                  background: 'var(--color-bg-secondary, var(--color-surface))',
-                  cursor: 'pointer',
-                  opacity: busyId === d.id ? 0.5 : 1,
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '999px',
+                  background: 'var(--color-accent-soft, #ede9fe)',
+                  color: 'var(--color-accent)',
                 }}
               >
-                → {s}
-              </button>
-            ))}
+                {d.status}
+              </span>
+            </div>
+
+            <p style={{ margin: '0.5rem 0', fontSize: '0.9rem' }}>{d.reason}</p>
+
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+              {DISPUTE_STATUSES.filter((s) => s !== d.status).map((s) => (
+                <button
+                  key={s}
+                  disabled={busyId === d.id}
+                  onClick={() => resolve(d, s)}
+                  style={{
+                    fontSize: '0.75rem',
+                    padding: '0.25rem 0.7rem',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-border-light)',
+                    background: 'var(--color-bg-secondary, var(--color-surface))',
+                    cursor: 'pointer',
+                    opacity: busyId === d.id ? 0.5 : 1,
+                  }}
+                >
+                  → {s}
+                </button>
+              ))}
+            </div>
           </div>
+        ))}
+      </div>
+
+      {pageCount > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem' }}>
+          <button
+            disabled={page === 0 || loading}
+            onClick={() => setPage(page - 1)}
+            className="btn-secondary"
+            style={{ fontSize: '0.8rem', padding: '0.3rem 0.7rem', minHeight: 'auto' }}
+          >
+            Prev
+          </button>
+          <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+            Page {page + 1} of {pageCount}
+          </span>
+          <button
+            disabled={(page + 1) * LIMIT >= total || loading}
+            onClick={() => setPage(page + 1)}
+            className="btn-secondary"
+            style={{ fontSize: '0.8rem', padding: '0.3rem 0.7rem', minHeight: 'auto' }}
+          >
+            Next
+          </button>
         </div>
-      ))}
-    </div>
+      )}
+    </>
   );
 }
 
