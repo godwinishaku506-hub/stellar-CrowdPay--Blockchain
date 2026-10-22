@@ -110,8 +110,18 @@ export default function Register() {
         {t('register.subtitle')}
       </p>
       <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-        <input placeholder={t('register.fullName')} value={form.name} onChange={set('name')} required />
-        <input type="email" placeholder={t('register.email')} value={form.email} onChange={set('email')} required />
+        <label className="label-strong" htmlFor="reg-name">{t('register.fullName')}</label>
+        <input id="reg-name" placeholder={t('register.fullName')} value={form.name} onChange={set('name')} required />
+        <label className="label-strong" htmlFor="reg-email">{t('register.email')}</label>
+        <input
+          id="reg-email"
+          type="email"
+          placeholder={t('register.email')}
+          value={form.email}
+          onChange={set('email')}
+          required
+        />
+        <label className="label-strong" htmlFor="reg-password">{t('register.password')}</label>
         <div style={{ position: 'relative' }}>
           <input
             id="reg-password"
@@ -205,7 +215,7 @@ export default function Register() {
             ) : null}
           </div>
         )}
-        {error && <p style={{ color: 'var(--color-status-error)', fontSize: '0.875rem' }}>{error}</p>}
+        {error && <p role="alert" style={{ color: 'var(--color-status-error)', fontSize: '0.875rem' }}>{error}</p>}
         <button type="submit" className="btn-primary" data-testid="register-submit" disabled={loading} style={{ padding: '0.8rem' }}>
           {loading ? t('register.loading') : t('common.signUp')}
         </button>
