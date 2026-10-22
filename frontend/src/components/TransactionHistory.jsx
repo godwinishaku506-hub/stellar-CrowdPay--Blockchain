@@ -1,16 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import { stellarExpertTxUrl } from '../config/stellar';
+import RelativeTime from './RelativeTime';
 
 const PAGE_SIZE = 10;
-
-function timeAgo(dateStr) {
-  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
 
 function KindBadge({ kind }) {
   const isContribution = kind === 'contribution';
@@ -30,7 +24,16 @@ function KindBadge({ kind }) {
   );
 }
 
+const STATUS_LABEL_KEYS = {
+  indexed: 'transactionStatus.indexed',
+  submitted: 'transactionStatus.submitted',
+  failed: 'transactionStatus.failed',
+  pending_signatures: 'transactionStatus.pendingSignatures',
+};
+
 function StatusPill({ status }) {
+  const { t } = useTranslation();
+  if (!status) return null;
   const map = {
     indexed:            { bg: '#dcfce7', color: '#166534' },
     submitted:          { bg: '#dbeafe', color: '#1e40af' },
@@ -38,8 +41,8 @@ function StatusPill({ status }) {
     pending_signatures: { bg: '#fef3c7', color: '#92400e' },
   };
   const style = map[status] || { bg: 'var(--color-surface)', color: 'var(--color-text-hint)' };
-  const label = status === 'pending_signatures'
-    ? 'Pending signatures'
+  const label = STATUS_LABEL_KEYS[status]
+    ? t(STATUS_LABEL_KEYS[status])
     : status.charAt(0).toUpperCase() + status.slice(1);
   return (
     <span style={{
@@ -107,7 +110,7 @@ export default function TransactionHistory({ campaignId, isCreator }) {
                     <KindBadge kind={tx.kind} />
                     <StatusPill status={tx.status} />
                   </div>
-                  <span style={styles.time}>{timeAgo(tx.created_at)}</span>
+                  <span style={styles.time}><RelativeTime date={tx.created_at} /></span>
                 </div>
 
                 {tx.tx_hash && (

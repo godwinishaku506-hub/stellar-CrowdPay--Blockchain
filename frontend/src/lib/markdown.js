@@ -1,4 +1,4 @@
-function escapeHtml(text) {
+export function escapeHtml(text) {
   return text
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -7,7 +7,8 @@ function escapeHtml(text) {
     .replaceAll("'", '&#39;');
 }
 
-// Security: escape untrusted input before applying any formatting. Do not reorder these steps.
+// SECURITY: input MUST be escaped before any markdown transform is applied.
+// The ordering is pinned by src/lib/markdown.test.js — do not reorder.
 export function markdownToHtml(markdown) {
   const escaped = escapeHtml(markdown || '');
   return escaped

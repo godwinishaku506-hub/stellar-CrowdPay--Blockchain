@@ -150,25 +150,27 @@ async function refresh() {
   }
 
   refreshPromise = (async () => {
-    const res = await fetch(`${BASE}/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-    });
+    try {
+      const res = await fetch(`${BASE}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
 
-    if (!res.ok) {
-      const text = await res.text();
-      let error = "Refresh failed";
-      try {
-        const data = JSON.parse(text);
-        error = data.error || error;
-      } catch {}
+      if (!res.ok) {
+        const text = await res.text();
+        let error = "Refresh failed";
+        try {
+          const data = JSON.parse(text);
+          error = data.error || error;
+        } catch {}
+        throw new Error(error);
+      }
+
+      const data = await res.json();
+      return data;
+    } finally {
       refreshPromise = null;
-      throw new Error(error);
     }
-
-    const data = await res.json();
-    refreshPromise = null;
-    return data;
   })();
 
   return refreshPromise;
@@ -204,6 +206,7 @@ export const api = {
   refresh,
 
   getMe: () => request("GET", "/users/me"),
+  updateMe: (body) => request("PATCH", "/users/me", body),
   getMyBalance: () => request("GET", "/users/me/balance"),
   getMyStats: () => request("GET", "/users/me/stats"),
   getMyContributions: () => request("GET", "/contributions/mine"),
@@ -214,6 +217,21 @@ export const api = {
   getCampaigns: (options = {}) =>
     request("GET", "/campaigns", null, { query: options }),
   getCampaign: (id) => request("GET", `/campaigns/${id}`),
+  getCampaignCategories: () => request("GET", "/campaigns/categories"),
+  getCloneData: async (id) => {
+    const c = await request("GET", `/campaigns/${id}`);
+    return {
+      title: c.title,
+      description: c.description,
+      target_amount: c.target_amount,
+      asset_type: c.asset_type,
+      min_contribution: c.min_contribution ?? "",
+      max_contribution: c.max_contribution ?? "",
+      max_per_user: c.max_per_user ?? "",
+      show_backer_amounts: c.show_backer_amounts,
+      category: c.category ?? "",
+    };
+  },
   getCampaignAnalytics: (id) => request("GET", `/campaigns/${id}/analytics`),
   getCampaignEmbed: (id) => request("GET", `/campaigns/${id}/embed`),
   getCampaignBackers: (id) => request("GET", `/campaigns/${id}/backers`),
@@ -278,6 +296,14 @@ export const api = {
     }),
   getContributionFinalization: (txHash) =>
     request('GET', `/contributions/finalization/${txHash}`),
+  getStellarTransactions: (options = {}) => {
+    const { campaignId, campaign_id, ...rest } = options || {};
+    const query = {
+      ...rest,
+      ...(campaignId || campaign_id ? { campaign_id: campaign_id || campaignId } : {}),
+    };
+    return request("GET", "/stellar/transactions", null, { query });
+  },
   failExpiredCampaigns: () => request('POST', '/campaigns/cron/fail-expired'),
   triggerCampaignRefunds: (campaignId) => request('POST', `/campaigns/${campaignId}/trigger-refunds`),
   initiateRefund: (id) => request('POST', `/campaigns/${id}/refund/initiate`, {}),
