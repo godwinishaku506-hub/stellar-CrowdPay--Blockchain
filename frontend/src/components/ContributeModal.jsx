@@ -29,10 +29,28 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
   const [phase, setPhase] = useState('form');
   const [result, setResult] = useState(null);
   const [feeBps, setFeeBps] = useState(0);
+  const [feePreview, setFeePreview] = useState(null);
+  const [feeError, setFeeError] = useState(null);
 
   useEffect(() => {
     api.getPlatformConfig().then((cfg) => setFeeBps(cfg.platform_fee_bps || 0)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!feeBps || !destAmount || Number(destAmount) <= 0) {
+      setFeePreview(null);
+      setFeeError(null);
+      return;
+    }
+    try {
+      const { feeAmount: feeAmt, netAmount: netAmt } = calculateFee(destAmount, feeBps);
+      setFeePreview({ feeAmount: feeAmt, netAmount: netAmt });
+      setFeeError(null);
+    } catch (err) {
+      setFeePreview(null);
+      setFeeError(err.message || t('contribute.enterAmount'));
+    }
+  }, [destAmount, feeBps, t]);
   const [freighterAvailable, setFreighterAvailable] = useState(false);
   const [freighterChecked, setFreighterChecked] = useState(false);
   const [existingContributions, setExistingContributions] = useState([]);
@@ -703,20 +721,19 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
 
               {feeBps > 0 && destAmount && Number(destAmount) > 0 && (
                 <div className="alert alert--info" style={{ marginTop: '0.85rem', fontSize: '0.875rem' }} role="status">
-                  {(() => {
-                    const { feeAmount: feeAmt, netAmount: netAmt } = calculateFee(destAmount, feeBps);
-                    return (
-                      <>
-                        <strong>{t('contribute.platformFee')}</strong>{' '}
-                        {t('contribute.feeDetail', {
-                          pct: feeBps / 100,
-                          fee: feeAmt,
-                          asset: campaign.asset_type,
-                          net: netAmt,
-                        })}
-                      </>
-                    );
-                  })()}
+                  {feeError ? (
+                    <p style={{ color: 'var(--color-danger-text, #dc2626)' }}>{feeError}</p>
+                  ) : feePreview ? (
+                    <>
+                      <strong>{t('contribute.platformFee')}</strong>{' '}
+                      {t('contribute.feeDetail', {
+                        pct: feeBps / 100,
+                        fee: feePreview.feeAmount,
+                        asset: campaign.asset_type,
+                        net: feePreview.netAmount,
+                      })}
+                    </>
+                  ) : null}
                 </div>
               )}
 
