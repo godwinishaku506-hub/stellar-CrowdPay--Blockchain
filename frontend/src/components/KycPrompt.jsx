@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 
-export default function KycPrompt({ token, onUserUpdate, title = 'Verify your identity to create campaigns' }) {
+export default function KycPrompt({ token, onUserUpdate, title }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

@@ -1,10 +1,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import RelativeTime from './RelativeTime';
 
 export default function NotificationDropdown({ notifications, onMarkRead, onMarkAllRead, onClose }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   async function handleClick(notif) {
     onClose();
@@ -18,11 +20,11 @@ export default function NotificationDropdown({ notifications, onMarkRead, onMark
   return (
     <div style={styles.dropdown}>
       <div style={styles.header}>
-        <span style={styles.headerTitle}>Notifications</span>
-        <button style={styles.markAll} onClick={onMarkAllRead}>Mark all as read</button>
+        <span style={styles.headerTitle}>{t('nav.notificationsTitle')}</span>
+        <button style={styles.markAll} onClick={onMarkAllRead}>{t('nav.markAllRead')}</button>
       </div>
       {notifications.length === 0 ? (
-        <div style={styles.empty}>No notifications yet.</div>
+        <div style={styles.empty}>{t('nav.noNotifications')}</div>
       ) : (
         notifications.map((n) => (
           <button

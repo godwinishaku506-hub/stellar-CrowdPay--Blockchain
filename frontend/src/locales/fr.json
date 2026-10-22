@@ -34,7 +34,14 @@
     "signup": "S'inscrire",
     "logout": "Se déconnecter",
     "selectLanguage": "Choisir la langue",
-    "homeAria": "Accueil CrowdPay"
+    "homeAria": "Accueil CrowdPay",
+    "dashboard": "Tableau de bord",
+    "developer": "Développeur",
+    "settings": "Paramètres",
+    "notificationsAria": "Notifications, {{count}} non lues",
+    "notificationsTitle": "Notifications",
+    "markAllRead": "Tout marquer comme lu",
+    "noNotifications": "Aucune notification pour le moment."
   },
   "home": {
     "hero_title": "Financez tout, depuis n'importe où.",

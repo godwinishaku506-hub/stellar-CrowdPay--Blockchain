@@ -14,6 +14,7 @@ export default function Navbar() {
   const [notifications, setNotifications] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const bellRef = useRef(null);
+  const bellBtnRef = useRef(null);
 
   const unread = notifications.filter((n) => !n.read_at).length;
 
@@ -43,6 +44,15 @@ export default function Navbar() {
   function handleLogout() {
     logout();
     navigate('/');
+  }
+
+  function handleMarkRead(id) {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)));
+  }
+
+  async function handleMarkAllRead() {
+    await api.markAllNotificationsRead().catch(() => {});
+    setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
   }
 
   return (
@@ -75,12 +85,34 @@ export default function Navbar() {
               >
                 {t('nav.startCampaign')}
               </Link>
+              <Link
+                to="/dashboard"
+                style={styles.link}
+                aria-current={pathname === '/dashboard' ? 'page' : undefined}
+              >
+                {t('nav.dashboard')}
+              </Link>
+              <Link
+                to="/developer"
+                style={styles.link}
+                aria-current={pathname === '/developer' ? 'page' : undefined}
+              >
+                {t('nav.developer')}
+              </Link>
+              <Link
+                to="/profile"
+                style={styles.link}
+                aria-current={pathname === '/profile' ? 'page' : undefined}
+              >
+                {t('nav.settings')}
+              </Link>
               <span style={styles.name} aria-hidden="true">{user.name}</span>
               <div style={styles.bellWrap} ref={bellRef}>
                 <button
+                  ref={bellBtnRef}
                   onClick={() => setShowDropdown((v) => !v)}
                   style={styles.bellBtn}
-                  aria-label={`${unread} unread notifications`}
+                  aria-label={t('nav.notificationsAria', { count: unread })}
                 >
                   🔔
                   {unread > 0 && <span style={styles.badge}>{unread}</span>}
@@ -128,5 +160,26 @@ const styles = {
     padding: '0.35rem 0.55rem',
     color: 'var(--color-text-secondary)',
     fontSize: '0.85rem',
+  },
+  bellWrap: { position: 'relative' },
+  bellBtn: {
+    position: 'relative',
+    background: 'transparent',
+    border: 'none',
+    fontSize: '1.15rem',
+    lineHeight: '1',
+    cursor: 'pointer',
+    padding: '0.35rem',
+  },
+  badge: {
+    position: 'absolute',
+    top: '-2px',
+    right: '-4px',
+    background: 'var(--color-accent)',
+    color: '#fff',
+    borderRadius: '999px',
+    fontSize: '0.65rem',
+    fontWeight: 700,
+    padding: '1px 5px',
   },
 };
