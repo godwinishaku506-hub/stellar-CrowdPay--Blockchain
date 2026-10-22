@@ -19,6 +19,7 @@ import NotFound from './pages/NotFound';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
+import { DialogProvider } from './context/DialogContext';
 
 export default function App() {
   const location = useLocation();
@@ -27,6 +28,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <DialogProvider>
         <ToastProvider>
         {!hideNavbar && <Navbar />}
         <Routes>
@@ -48,6 +50,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
         </ToastProvider>
+        </DialogProvider>
       </AuthProvider>
     </ThemeProvider>
   );

@@ -23,6 +23,11 @@
     "signUp": "S'inscrire",
     "yes": "Oui"
   },
+  "dialog": {
+    "confirm": "Confirmer",
+    "promptConfirm": "Envoyer",
+    "ok": "OK"
+  },
   "nav": {
     "startCampaign": "Lancer une campagne",
     "login": "Se connecter",
