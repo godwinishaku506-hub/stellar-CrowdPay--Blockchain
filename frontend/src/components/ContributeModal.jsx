@@ -899,7 +899,7 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
                         url: `${window.location.origin}/campaigns/${campaign.id}`,
                       })
                     );
-                    window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
+                    window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'noopener,noreferrer');
                   }}
                 >
                   {t('contribute.shareOnX')}
@@ -915,7 +915,7 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
                         url: `${window.location.origin}/campaigns/${campaign.id}`,
                       })
                     );
-                    window.open(`https://wa.me/?text=${text}`, '_blank');
+                    window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
                   }}
                 >
                   {t('contribute.whatsapp')}
