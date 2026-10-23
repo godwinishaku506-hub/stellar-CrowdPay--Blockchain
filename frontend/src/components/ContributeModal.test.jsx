@@ -235,7 +235,8 @@ describe('ContributeModal custodial payment and finalization', () => {
     await submitCustodial();
     await advancePoll(1);
     expect(screen.getByRole('alert')).toHaveTextContent(/transaction failed on stellar/i);
-    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('heading', { name: /payment failed/i })).toBeInTheDocument();
+    expect(onSuccess).not.toHaveBeenCalled();
   });
 
   it('keeps polling through finalization errors and stops after the attempt budget', async () => {
@@ -246,9 +247,9 @@ describe('ContributeModal custodial payment and finalization', () => {
     await submitCustodial();
     await advancePoll(15);
     expect(api.getContributionFinalization).toHaveBeenCalledTimes(15);
-    expect(screen.getByRole('heading', { name: /payment submitted/i })).toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('heading', { name: /confirmation pending/i })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(/could not confirm whether this transaction reached the stellar ledger/i);
+    expect(onSuccess).not.toHaveBeenCalled();
 
     await advancePoll(3);
     expect(api.getContributionFinalization).toHaveBeenCalledTimes(15);

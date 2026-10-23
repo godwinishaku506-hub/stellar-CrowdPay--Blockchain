@@ -109,6 +109,7 @@ export default function Campaign() {
   const [campaign, setCampaign] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [contributions, setContributions] = useState(null);
+  const contributionsRef = useRef([]);
   const [totalContributions, setTotalContributions] = useState(0);
   const [showAll, setShowAll] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -188,10 +189,13 @@ export default function Campaign() {
     api
       .getContributions(id, { limit: showAll ? 100 : 10, offset: 0 })
       .then((data) => {
-        setContributions(data.contributions || []);
+        const nextContributions = data.contributions || [];
+        contributionsRef.current = nextContributions;
+        setContributions(nextContributions);
         setTotalContributions(data.total || 0);
       })
       .catch(() => {
+        contributionsRef.current = [];
         setContributions([]);
         setTotalContributions(0);
       });
@@ -248,7 +252,9 @@ export default function Campaign() {
         ]);
         if (aborted) return;
         setCampaign(nextCampaign);
-        setContributions(nextContributionsData.contributions || []);
+        const nextContributions = nextContributionsData.contributions || [];
+        contributionsRef.current = nextContributions;
+        setContributions(nextContributions);
         setTotalContributions(nextContributionsData.total || 0);
       } catch {
         // ignore transient polling errors
@@ -280,7 +286,7 @@ export default function Campaign() {
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [id, token, isLive, campaign, showAll]);
+  }, [id, token, isLive, campaign?.status, showAll]);
 
   useEffect(() => {
     if (!window.EventSource) return;
@@ -301,21 +307,15 @@ export default function Campaign() {
         setCampaign((prev) =>
           prev ? { ...prev, raised_amount: msg.raised_amount } : prev,
         );
-        setContributions((prev) => {
-          const current = prev || [];
-          const exists = current.some(
-            (c) => c.tx_hash === msg.contribution.tx_hash,
-          );
-          if (exists) return current;
+        const current = contributionsRef.current;
+        if (current.some((c) => c.tx_hash === msg.contribution.tx_hash)) return;
 
-          setTotalContributions((t) => t + 1);
-
-          const updated = [msg.contribution, ...current];
-          if (!showAll && updated.length > 10) {
-            return updated.slice(0, 10);
-          }
-          return updated;
-        });
+        const updated = [msg.contribution, ...current];
+        contributionsRef.current = !showAll && updated.length > 10
+          ? updated.slice(0, 10)
+          : updated;
+        setContributions(contributionsRef.current);
+        setTotalContributions((total) => total + 1);
       }
     };
 
@@ -2607,6 +2607,7 @@ export default function Campaign() {
   const [campaign, setCampaign] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [contributions, setContributions] = useState(null);
+  const contributionsRef = useRef([]);
   const [totalContributions, setTotalContributions] = useState(0);
   const [showAll, setShowAll] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -2783,10 +2784,13 @@ export default function Campaign() {
     api
       .getContributions(id, { limit: showAll ? 100 : 10, offset: 0 })
       .then((data) => {
-        setContributions(data.contributions || []);
+        const nextContributions = data.contributions || [];
+        contributionsRef.current = nextContributions;
+        setContributions(nextContributions);
         setTotalContributions(data.total || 0);
       })
       .catch(() => {
+        contributionsRef.current = [];
         setContributions([]);
         setTotalContributions(0);
       });
@@ -2845,7 +2849,9 @@ export default function Campaign() {
         ]);
         if (aborted) return;
         setCampaign(nextCampaign);
-        setContributions(nextContributionsData.contributions || []);
+        const nextContributions = nextContributionsData.contributions || [];
+        contributionsRef.current = nextContributions;
+        setContributions(nextContributions);
         setTotalContributions(nextContributionsData.total || 0);
       } catch {
         // ignore transient polling errors
@@ -2877,7 +2883,7 @@ export default function Campaign() {
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [id, isLive, campaign, showAll]);
+  }, [id, isLive, campaign?.status, showAll]);
 
   useEffect(() => {
     showAllRef.current = showAll;
@@ -2928,21 +2934,15 @@ export default function Campaign() {
           setCampaign((prev) =>
             prev ? { ...prev, raised_amount: msg.raised_amount } : prev,
           );
-          setContributions((prev) => {
-            const current = prev || [];
-            const exists = current.some(
-              (c) => c.tx_hash === msg.contribution.tx_hash,
-            );
-            if (exists) return current;
+          const current = contributionsRef.current;
+          if (current.some((c) => c.tx_hash === msg.contribution.tx_hash)) return;
 
-            setTotalContributions((t) => t + 1);
-
-            const updated = [msg.contribution, ...current];
-            if (!showAllRef.current && updated.length > 10) {
-              return updated.slice(0, 10);
-            }
-            return updated;
-          });
+          const updated = [msg.contribution, ...current];
+          contributionsRef.current = !showAllRef.current && updated.length > 10
+            ? updated.slice(0, 10)
+            : updated;
+          setContributions(contributionsRef.current);
+          setTotalContributions((total) => total + 1);
         }
       };
 
@@ -4932,4 +4932,3 @@ const styles = {
     flexShrink: 0,
   },
 };
-

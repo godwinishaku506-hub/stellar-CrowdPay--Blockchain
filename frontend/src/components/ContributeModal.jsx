@@ -403,19 +403,15 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
               return;
             }
             if (finalizationResult.finalization_status === 'failed') {
-              setPhase('success');
+              setPhase('failed');
               setError(t('contribute.finalizationFailed'));
-              onSuccess();
               return;
             }
           } catch {
             // Keep polling on error
           }
         }
-        // Timeout: show success screen but allow user to view on Stellar Expert
-        setPhase('success');
-        setError(null);
-        onSuccess();
+        setPhase('pending');
       };
       
       pollFinalization(data.tx_hash);
@@ -788,6 +784,36 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
               >
                 {t('contribute.reopenDepositWindow')}
               </button>
+            )}
+            <button type="button" className="btn-primary" style={{ width: '100%' }} onClick={handleClose}>
+              {t('common.close')}
+            </button>
+          </div>
+        ) : phase === 'failed' || phase === 'pending' ? (
+          <div>
+            <h2 id="contribute-title" style={styles.title}>
+              {phase === 'failed' ? t('contribute.paymentFailed') : t('contribute.paymentPending')}
+            </h2>
+            <p
+              className={`alert ${phase === 'failed' ? 'alert--error' : 'alert--info'}`}
+              style={{ marginBottom: '1rem' }}
+              role={phase === 'failed' ? 'alert' : 'status'}
+            >
+              {phase === 'failed'
+                ? error
+                : t('contribute.paymentPendingBody')}
+            </p>
+            {result?.tx_hash && (
+              <p style={{ fontSize: '0.875rem', marginBottom: '1rem', wordBreak: 'break-all', textAlign: 'center' }}>
+                <a
+                  href={stellarExpertTxUrl(result.tx_hash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--color-accent)', fontWeight: 600 }}
+                >
+                  {t('contribute.viewTransactionOnStellarExpert')}
+                </a>
+              </p>
             )}
             <button type="button" className="btn-primary" style={{ width: '100%' }} onClick={handleClose}>
               {t('common.close')}
