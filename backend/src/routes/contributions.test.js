@@ -904,6 +904,20 @@ test('POST /api/contributions/prepare and /submit-signed have rate limiting appl
   assert.ok(router.stack.some((layer) => layer.route && layer.route.path === '/submit-signed'));
 });
 
+test('GET /api/contributions/campaign/:id 404s for a soft-deleted campaign (no backer data)', async () => {
+  const app = buildApp({
+    queryImpl: async (text) => {
+      if (/FROM campaigns\b/.test(text)) {
+        return /deleted_at IS NULL/.test(text) ? { rows: [] } : { rows: [{ id: 'c', creator_id: 'x' }] };
+      }
+      return { rows: [{ id: 'k', sender_public_key: 'GPII', total_count: 1 }] };
+    },
+  });
+  const res = await request(app).get('/api/contributions/campaign/3f2b8c1e-1d2a-4b3c-9d4e-5f6a7b8c9d0e');
+  assert.equal(res.status, 404);
+  assert.ok(!JSON.stringify(res.body).includes('GPII'));
+});
+
 // ---- backer wall keyset pagination ------------------------------------------
 
 const WALL_CAMPAIGN = '11111111-1111-1111-1111-111111111111';
@@ -924,6 +938,7 @@ function wallApp(pageRows) {
   const app = buildApp({
     queryImpl: async (text, params) => {
       queries.push({ text, params });
+      if (/FROM campaigns\b/.test(text)) return { rows: [{ id: WALL_CAMPAIGN }] };
       if (text.includes('COUNT(*)::int AS total FROM contributions')) return { rows: [{ total: 42 }] };
       if (text.includes('FROM contributions c')) return { rows: pageRows };
       return { rows: [] };

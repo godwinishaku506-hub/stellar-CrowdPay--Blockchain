@@ -1,7 +1,13 @@
 const router = require('express').Router();
 const rateLimit = require('express-rate-limit');
 const db = require('../config/database');
+const { NOT_DELETED, notDeleted, findVisibleCampaign } = require('../utils/campaignVisibility');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const {
+  disputeCreateValidation,
+  disputeUpdateValidation,
+  validateRequestUnprocessable,
+} = require('../middleware/requestSchemas');
 const { sendEmailSafe } = require('../services/emailService');
 const logger = require('../config/logger');
 const { sendErrorResponse } = require('../middleware/errorHandler');
@@ -101,19 +107,19 @@ async function logDisputeEvent(client, { disputeId, actorId, action, note }) {
  *         description: Invalid reason or missing description
  */
 // POST /campaigns/:id/disputes — contributor raises a dispute
-router.post('/campaigns/:id/disputes', requireAuth, disputeCreateLimiter, async (req, res) => {
+router.post(
+  '/campaigns/:id/disputes',
+  requireAuth,
+  disputeCreateLimiter,
+  disputeCreateValidation,
+  validateRequestUnprocessable,
+  async (req, res) => {
+  // reason, description (HTML-stripped, trimmed) and evidence_url are
+  // validated by disputeCreateValidation.
   const { reason, description, evidence_url } = req.body;
 
-  const VALID_REASONS = ['non_delivery', 'misrepresentation', 'abandoned', 'other'];
-  if (!VALID_REASONS.includes(reason)) {
-    return sendErrorResponse(res, 422, `reason must be one of: ${VALID_REASONS.join(', ')}`);
-  }
-  if (!description || !description.trim()) {
-    return sendErrorResponse(res, 422, 'description is required');
-  }
-
   const { rows: campaigns } = await db.query(
-    'SELECT id, creator_id, title FROM campaigns WHERE id = $1',
+    `SELECT id, creator_id, title FROM campaigns WHERE id = $1 AND ${NOT_DELETED}`,
     [req.params.id]
   );
   if (!campaigns.length) return sendErrorResponse(res, 404, 'Campaign not found');
@@ -247,6 +253,9 @@ router.post('/campaigns/:id/disputes', requireAuth, disputeCreateLimiter, async 
  */
 // GET /campaigns/:id/disputes — admin only
 router.get('/campaigns/:id/disputes', requireAuth, requireRole('admin'), async (req, res) => {
+  if (!(await findVisibleCampaign(db, req.params.id))) {
+    return sendErrorResponse(res, 404, 'Campaign not found');
+  }
   const { rows } = await db.query(
     `SELECT d.*, u.name AS raised_by_name, u.email AS raised_by_email
      FROM disputes d
@@ -310,16 +319,19 @@ router.get('/campaigns/:id/disputes', requireAuth, requireRole('admin'), async (
  *         description: Invalid status
  */
 // PATCH /disputes/:id — admin updates status + resolution note
-router.patch('/disputes/:id', requireAuth, requireRole('admin'), async (req, res) => {
+router.patch(
+  '/disputes/:id',
+  requireAuth,
+  requireRole('admin'),
+  disputeUpdateValidation,
+  validateRequestUnprocessable,
+  async (req, res) => {
   const { status, resolution_note } = req.body;
 
-  const VALID_STATUSES = ['open', 'under_review', 'resolved_creator', 'resolved_contributor', 'closed'];
-  if (!VALID_STATUSES.includes(status)) {
-    return sendErrorResponse(res, 422, `status must be one of: ${VALID_STATUSES.join(', ')}`);
-  }
-
   const { rows: disputes } = await db.query(
-    'SELECT * FROM disputes WHERE id = $1',
+    `SELECT d.* FROM disputes d
+       JOIN campaigns c ON c.id = d.campaign_id
+      WHERE d.id = $1 AND ${notDeleted('c')}`,
     [req.params.id]
   );
   if (!disputes.length) return sendErrorResponse(res, 404, 'Dispute not found');
@@ -467,8 +479,10 @@ router.get('/disputes/:id/events', requireAuth, requireRole('admin'), async (req
   const { rows } = await db.query(
     `SELECT de.*, u.name AS actor_name
      FROM dispute_events de
+     JOIN disputes d ON d.id = de.dispute_id
+     JOIN campaigns c ON c.id = d.campaign_id
      LEFT JOIN users u ON u.id = de.actor_id
-     WHERE de.dispute_id = $1
+     WHERE de.dispute_id = $1 AND ${notDeleted('c')}
      ORDER BY de.created_at ASC`,
     [req.params.id]
   );

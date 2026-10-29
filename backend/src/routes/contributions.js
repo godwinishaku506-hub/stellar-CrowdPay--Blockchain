@@ -41,6 +41,7 @@ const { decodeCursor, pageWithCursor } = require('../utils/pagination');
 /** Cursor namespace for the per-campaign backer wall. */
 const BACKER_WALL_SORT = 'contributions_newest';
 const asyncHandler = require('../utils/asyncHandler');
+const { findVisibleCampaign } = require('../utils/campaignVisibility');
 const { parseAmountToStroops, parseUserAmount, formatStroops } = require('../utils/amounts');
 const { sendErrorResponse } = require('../middleware/errorHandler');
 
@@ -180,6 +181,10 @@ router.get('/mine', requireAuth, asyncHandler(async (req, res) => {
 
 // Get contributions for a campaign (public endpoint — sensitive fields are redacted for unauthenticated/unauthorised callers)
 router.get('/campaign/:campaignId', publicContributionReadLimiter, optionalAuth, async (req, res) => {
+  // A soft-deleted campaign's backer wall (contributor data) is not public.
+  if (!(await findVisibleCampaign(db, req.params.campaignId))) {
+    return sendErrorResponse(res, 404, 'Campaign not found');
+  }
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
   const offset = Math.max(parseInt(req.query.offset) || 0, 0);
   // Keyset pagination on (created_at, id): a cursor, or the first page with
