@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import Campaign from './Campaign';
 
@@ -210,5 +210,29 @@ describe('Campaign Page', () => {
     expect(document.querySelector('meta[name="twitter:description"]')).toBeNull();
     expect(document.querySelector('meta[name="twitter:card"]')).toBeNull();
     expect(document.querySelector('meta[name="description"]')).toBeNull();
+  });
+
+  it('opens a single X share window with noopener', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    render(
+      <MemoryRouter initialEntries={['/campaigns/1']}>
+        <Routes>
+          <Route path="/campaigns/:id" element={<Campaign />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const shareButton = await screen.findByRole('button', { name: /share on x/i });
+    fireEvent.click(shareButton);
+
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledWith(
+      expect.stringContaining('https://twitter.com/intent/tweet?text='),
+      '_blank',
+      'noopener,noreferrer'
+    );
+
+    openSpy.mockRestore();
   });
 });
