@@ -211,4 +211,22 @@ describe('Campaign Page', () => {
     expect(document.querySelector('meta[name="twitter:card"]')).toBeNull();
     expect(document.querySelector('meta[name="description"]')).toBeNull();
   });
+
+  it('hides delete button when a withdrawal is pending', async () => {
+    api.listWithdrawals.mockResolvedValue([{ id: 1, status: 'pending' }]);
+
+    render(
+      <MemoryRouter initialEntries={['/campaigns/1']}>
+        <Routes>
+          <Route path="/campaigns/:id" element={<Campaign />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Community Garden Project')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('button', { name: /delete campaign/i })).toBeNull();
+  });
 });

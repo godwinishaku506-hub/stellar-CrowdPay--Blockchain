@@ -213,15 +213,13 @@ export default function Campaign() {
       .catch(() => setAnalytics(null));
 
     // Check for pending withdrawals
-    if (token) {
-      api
-        .listWithdrawals(id)
-        .then((withdrawals) => {
-          const hasPending = withdrawals.some((w) => w.status === "pending");
-          setHasPendingWithdrawal(hasPending);
-        })
-        .catch(() => setHasPendingWithdrawal(false));
-    }
+    api
+      .listWithdrawals(id)
+      .then((withdrawals) => {
+        const hasPending = Array.isArray(withdrawals) && withdrawals.some((w) => w.status === "pending");
+        setHasPendingWithdrawal(hasPending);
+      })
+      .catch(() => setHasPendingWithdrawal(false));
   }, [id, token, contributed, showAll]);
 
   useEffect(() => {
@@ -2804,15 +2802,13 @@ export default function Campaign() {
     }
 
     // Check for pending withdrawals
-    if (user) {
-      api
-        .listWithdrawals(id)
-        .then((withdrawals) => {
-          const hasPending = withdrawals.some((w) => w.status === 'pending');
-          setHasPendingWithdrawal(hasPending);
-        })
-        .catch(() => setHasPendingWithdrawal(false));
-    }
+    api
+      .listWithdrawals(id)
+      .then((withdrawals) => {
+        const hasPending = Array.isArray(withdrawals) && withdrawals.some((w) => w.status === 'pending');
+        setHasPendingWithdrawal(hasPending);
+      })
+      .catch(() => setHasPendingWithdrawal(false));
   }, [id, user, contributed, showAll]);
 
   useEffect(() => {
