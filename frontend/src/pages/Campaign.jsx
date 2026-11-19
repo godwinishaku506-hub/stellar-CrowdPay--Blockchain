@@ -3630,7 +3630,6 @@ export default function Campaign() {
               "_blank",
               "noopener,noreferrer",
             );
-            window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
           }}
         >
           Share on X
