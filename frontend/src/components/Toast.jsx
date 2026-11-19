@@ -7,9 +7,21 @@ export function Toast({ message, type = 'success', onDismiss }) {
   }, [onDismiss]);
 
   const colors = {
-    success: { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' },
-    error: { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' },
-    info: { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' },
+    success: {
+      bg: 'var(--color-success-bg, #d1fae5)',
+      color: 'var(--color-success-text, #065f46)',
+      border: 'var(--color-success-border, #6ee7b7)',
+    },
+    error: {
+      bg: 'var(--color-error-bg, #fee2e2)',
+      color: 'var(--color-error-text, #991b1b)',
+      border: 'var(--color-error-border, #fca5a5)',
+    },
+    info: {
+      bg: 'var(--color-info-bg, #dbeafe)',
+      color: 'var(--color-info-text, #1e40af)',
+      border: 'var(--color-info-border, #93c5fd)',
+    },
   };
   const c = colors[type] || colors.info;
 
