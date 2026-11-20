@@ -67,7 +67,7 @@ const DEV_ONLY_VALUES = {
 };
 
 function validateEnv() {
-  const missing = REQUIRED.filter((key) => !process.env[key]);
+  const missing = REQUIRED.filter((key) => !process.env[key]?.trim());
   if (missing.length) {
     const list = missing.map((k) => `  - ${k}`).join('\n');
     process.stderr.write(
