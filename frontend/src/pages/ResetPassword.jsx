@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
@@ -14,6 +14,9 @@ export default function ResetPassword() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const redirectTimer = useRef(null);
+
+  useEffect(() => () => clearTimeout(redirectTimer.current), []);
 
   function validatePassword(value) {
     if (value.length < 8) return t('resetPassword.errorTooShort');
@@ -38,7 +41,7 @@ export default function ResetPassword() {
     try {
       await api.resetPassword({ token, password });
       setSuccess(true);
-      setTimeout(() => navigate('/login'), 3000);
+      redirectTimer.current = setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
       setError(err.message);
     } finally {

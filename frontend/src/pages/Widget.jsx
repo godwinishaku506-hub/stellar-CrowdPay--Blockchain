@@ -81,7 +81,18 @@ export default function Widget() {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div style={styles.shell} aria-busy="true" aria-label="Loading campaign">
+        <div style={styles.card}>
+          <div style={{ ...styles.skeleton, height: '16px', width: '60%', marginBottom: '0.6rem' }} />
+          <div style={{ ...styles.skeleton, height: '8px', marginBottom: '0.6rem' }} />
+          <div style={{ ...styles.skeleton, height: '12px', width: '45%', marginBottom: '0.5rem' }} />
+          <div style={{ ...styles.skeleton, height: '12px', width: '30%' }} />
+        </div>
+      </div>
+    );
+  }
 
   const raisedAmount = Number(data.raised_amount) || 0;
   const targetAmount = Number(data.target_amount) || 0;
@@ -91,6 +102,11 @@ export default function Widget() {
   return (
     <div style={styles.shell}>
       <div style={styles.card}>
+        {error && (
+          <div role="alert" style={styles.banner}>
+            {error}
+          </div>
+        )}
         <div style={styles.title}>{data.title}</div>
         <div style={styles.progressTrack}>
           <div style={{ ...styles.progressFill, width: `${pct}%` }} />
@@ -171,6 +187,18 @@ const styles = {
     fontSize: '0.75rem',
     fontWeight: 600,
     textDecoration: 'none',
+  },
+  skeleton: {
+    borderRadius: '6px',
+    background: '#eee',
+  },
+  banner: {
+    marginBottom: '0.45rem',
+    padding: '0.25rem 0.5rem',
+    borderRadius: '6px',
+    background: '#fef2f2',
+    color: '#b91c1c',
+    fontSize: '0.75rem',
   },
   error: {
     color: '#b91c1c',

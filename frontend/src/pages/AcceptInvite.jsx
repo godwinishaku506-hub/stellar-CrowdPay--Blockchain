@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,9 @@ export default function AcceptInvite() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const redirectTimer = useRef(null);
+
+  useEffect(() => () => clearTimeout(redirectTimer.current), []);
 
   async function handleAccept() {
     setLoading(true);
@@ -20,7 +23,7 @@ export default function AcceptInvite() {
       await api.acceptCampaignInvitation(id, { token });
       setSuccess(true);
       setLoading(false);
-      setTimeout(() => {
+      redirectTimer.current = setTimeout(() => {
         navigate(`/campaigns/${id}`);
       }, 2000);
     } catch (err) {
