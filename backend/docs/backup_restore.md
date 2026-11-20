@@ -201,7 +201,7 @@ Run at least once per quarter (and after any major schema/migration change). Rec
    - Logical: `pg_restore --clean --if-exists --no-owner -d restoredb backup.dump`
    - PITR: restore base backup into `PGDATA`, set `restore_command`, `recovery_target_time`, start Postgres, wait for recovery to complete.
 5. **Validate**:
-   - Row counts on critical tables (wallets, KYC references) match expectations.
+   - Row counts on critical tables (`users`, `campaigns`) match expectations; verify `users.wallet_secret_encrypted`, `campaigns.wallet_secret_encrypted`, and `users.kyc_provider_reference` are populated as expected.
    - Spot-check a sample of wallet ciphertexts decrypt correctly with the application key.
    - Run application smoke tests against the restored instance.
    - Confirm `pg_controldata` / recovery log shows the expected target time.
@@ -213,7 +213,7 @@ Run at least once per quarter (and after any major schema/migration change). Rec
 
 - [ ] Backup decrypted successfully with the current key.
 - [ ] Restore completed without errors.
-- [ ] Critical table row counts verified.
+- [ ] Row counts on `users` and `campaigns` verified; `wallet_secret_encrypted` and `kyc_provider_reference` columns populated as expected.
 - [ ] Sample wallet ciphertext decryption verified.
 - [ ] Application smoke tests passed.
 - [ ] RTO measured and recorded.
