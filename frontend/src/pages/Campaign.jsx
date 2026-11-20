@@ -112,6 +112,7 @@ export default function Campaign() {
   const contributionsRef = useRef([]);
   const [totalContributions, setTotalContributions] = useState(0);
   const [showAll, setShowAll] = useState(false);
+  const BACKER_LIMIT = 100;
   const [showModal, setShowModal] = useState(false);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeSubmitted, setDisputeSubmitted] = useState(false);
@@ -187,7 +188,7 @@ export default function Campaign() {
       })
       .catch((err) => setLoadError(err.message || "Could not load campaign."));
     api
-      .getContributions(id, { limit: showAll ? 100 : 10, offset: 0 })
+      .getContributions(id, { limit: showAll ? BACKER_LIMIT : 10, offset: 0 })
       .then((data) => {
         const nextContributions = data.contributions || [];
         contributionsRef.current = nextContributions;
@@ -1785,7 +1786,11 @@ export default function Campaign() {
                 onClick={() => setShowAll((prev) => !prev)}
                 style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', cursor: 'pointer' }}
               >
-                {showAll ? "Show less" : `Show all (${totalContributions})`}
+                {showAll
+                  ? "Show less"
+                  : totalContributions > BACKER_LIMIT
+                  ? `Show top ${BACKER_LIMIT} of ${totalContributions}`
+                  : `Show all (${totalContributions})`}
               </button>
             </div>
           )}
