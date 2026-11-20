@@ -87,22 +87,6 @@ export default function ContributeModal({
     ? Math.max(0, Number(campaign.max_per_user) - contributedSoFar)
     : 0;
 
-  // Fetch anchor info on mount (the per-user cap total comes from the campaign payload)
-  useEffect(() => {
-    api.getAnchorInfo().then(setAnchorInfo).catch(() => {});
-  }, [campaign.id]);
-
-  // Check Freighter availability
-  useEffect(() => {
-    isFreighterConnected()
-      .then((res) => {
-        const connected = res?.isConnected ?? res;
-        setFreighterAvailable(!!connected);
-        setFreighterChecked(true);
-      })
-      .catch(() => setFreighterChecked(true));
-  }, []);
-
   const fetchQuote = useCallback(async () => {
     if (!isPathPayment || !effectiveSendAsset || !destAmount || Number(destAmount) <= 0) {
       setQuote(null);
@@ -152,7 +136,7 @@ export default function ContributeModal({
       try {
         const connection = await isFreighterConnected();
         if (active) {
-          setFreighterAvailable(Boolean(connection?.isConnected));
+          setFreighterAvailable(Boolean(connection?.isConnected ?? connection));
         }
       } catch {
         if (active) {

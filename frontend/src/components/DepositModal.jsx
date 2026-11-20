@@ -31,9 +31,10 @@ export default function DepositModal({ onClose, onSuccess }) {
       .catch(() => {});
   }, []);
 
+  const handleCloseRef = useRef(null);
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') handleClose();
+      if (e.key === 'Escape') handleCloseRef.current?.();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -147,6 +148,7 @@ export default function DepositModal({ onClose, onSuccess }) {
     if (popupRef.current && !popupRef.current.closed) popupRef.current.close();
     onClose();
   }
+  handleCloseRef.current = handleClose;
 
   return (
     <div className="modal-overlay" style={styles.overlay} onClick={handleClose} role="presentation">

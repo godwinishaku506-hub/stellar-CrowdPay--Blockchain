@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 
@@ -14,6 +14,47 @@ export default function DisputeModal({ campaign, onClose, onSubmitted }) {
   const [form, setForm] = useState({ reason: 'non_delivery', description: '', evidence_url: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const previous = document.activeElement;
+    const dialog = dialogRef.current;
+    const focusables = () =>
+      dialog
+        ? Array.from(
+            dialog.querySelectorAll(
+              'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            )
+          ).filter((el) => !el.disabled)
+        : [];
+    focusables()[0]?.focus();
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const els = focusables();
+      if (!els.length) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      previous?.focus?.();
+    };
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -35,8 +76,16 @@ export default function DisputeModal({ campaign, onClose, onSubmitted }) {
   }
 
   return (
-    <div style={overlay} role="dialog" aria-modal="true" aria-labelledby="dispute-title">
-      <div style={modal}>
+    <div
+      style={overlay}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dispute-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div style={modal} ref={dialogRef}>
         <div
           style={{
             display: 'flex',

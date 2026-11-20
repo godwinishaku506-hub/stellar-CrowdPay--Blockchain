@@ -185,6 +185,14 @@ const styles = {
     padding: '2px 8px',
     borderRadius: '99px',
   },
+  trending: {
+    background: 'var(--color-success-bg, var(--color-accent-lightest))',
+    color: 'var(--color-success-text)',
+    fontSize: '0.75rem',
+    fontWeight: 700,
+    padding: '2px 8px',
+    borderRadius: '99px',
+  },
   updates: {
     fontSize: '0.75rem',
     fontWeight: 700,
