@@ -12,6 +12,9 @@ const EVENT_OPTIONS = [
 
 const SCOPE_OPTIONS = ['read', 'write', 'withdrawals', 'developer', 'full'];
 
+const CREDENTIAL_TIMEOUT_MS = 60000;
+const HIGH_PRIVILEGE_SCOPES = ['withdrawals', 'full'];
+
 export default function Developer() {
   const { user } = useAuth();
   const location = useLocation();
@@ -20,7 +23,7 @@ export default function Developer() {
   const [deliveries, setDeliveries] = useState([]);
   const [error, setError] = useState('');
   const [newKeyLabel, setNewKeyLabel] = useState('Integration');
-  const [newKeyScopes, setNewKeyScopes] = useState(['read', 'write', 'withdrawals']);
+  const [newKeyScopes, setNewKeyScopes] = useState(['read']);
   const [revealedKey, setRevealedKey] = useState('');
   const [hookUrl, setHookUrl] = useState('');
   const [hookEvents, setHookEvents] = useState(['contribution.received']);
@@ -46,8 +49,23 @@ export default function Developer() {
   }
 
   useEffect(() => {
+    if (!user) return;
     refresh();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // Auto-hide one-time credentials after a timeout
+  useEffect(() => {
+    if (!revealedKey) return undefined;
+    const t = setTimeout(() => setRevealedKey(''), CREDENTIAL_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [revealedKey]);
+
+  useEffect(() => {
+    if (!revealedSecret) return undefined;
+    const t = setTimeout(() => setRevealedSecret(''), CREDENTIAL_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [revealedSecret]);
 
   if (!user) {
     return (
@@ -145,10 +163,18 @@ export default function Developer() {
               marginBottom: '1rem',
             }}
           >
-            <strong>Copy now:</strong>
+            <strong>Copy now (hidden automatically in 60s):</strong>
             <pre style={{ margin: '0.5rem 0 0', wordBreak: 'break-all', fontSize: '0.8rem' }}>
               {revealedKey}
             </pre>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ marginTop: '0.5rem', padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
+              onClick={() => setRevealedKey('')}
+            >
+              I've saved this
+            </button>
           </div>
         )}
         <form
@@ -181,6 +207,15 @@ export default function Developer() {
               {sc}
             </label>
           ))}
+          {newKeyScopes.some((s) => HIGH_PRIVILEGE_SCOPES.includes(s)) && (
+            <span
+              role="alert"
+              style={{ flexBasis: '100%', fontSize: '0.8rem', color: 'var(--color-status-error)' }}
+            >
+              Warning: withdrawals/full scopes allow moving funds. Only enable them if this key
+              truly needs that access.
+            </span>
+          )}
           <button type="submit" className="btn-primary" style={{ padding: '0.45rem 0.9rem' }}>
             Create key
           </button>
@@ -236,10 +271,18 @@ export default function Developer() {
               marginBottom: '1rem',
             }}
           >
-            <strong>Signing secret (copy once):</strong>
+            <strong>Signing secret (copy once, hidden automatically in 60s):</strong>
             <pre style={{ margin: '0.5rem 0 0', wordBreak: 'break-all', fontSize: '0.8rem' }}>
               {revealedSecret}
             </pre>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ marginTop: '0.5rem', padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
+              onClick={() => setRevealedSecret('')}
+            >
+              I've saved this
+            </button>
           </div>
         )}
         <form

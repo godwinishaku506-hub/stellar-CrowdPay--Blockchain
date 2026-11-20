@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { markJustRegistered } from '../lib/onboarding';
+import { isValidEmail } from '../lib/validators';
 import { isConnected as isFreighterConnected, getPublicKey, requestAccess } from '@stellar/freighter-api';
 
 function passwordStrength(pw) {
@@ -42,7 +43,7 @@ export default function Register() {
       setError(t('register.required'));
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    if (!isValidEmail(form.email)) {
       setError(t('register.invalidEmail'));
       return;
     }
@@ -235,6 +236,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { markJustRegistered } from '../lib/onboarding';
+import { isValidEmail } from '../lib/validators';
 import { isConnected as isFreighterConnected, getPublicKey, requestAccess } from '@stellar/freighter-api';
 
 function passwordStrength(pw) {
@@ -273,7 +275,7 @@ export default function Register() {
       setError(t('register.required'));
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    if (!isValidEmail(form.email)) {
       setError(t('register.invalidEmail'));
       return;
     }

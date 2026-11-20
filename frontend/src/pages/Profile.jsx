@@ -3,6 +3,7 @@ import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { stellarExpertAccountUrl } from '../config/stellar';
 import { api } from '../services/api';
+import { isValidEmail } from '../lib/validators';
 
 const DEFAULT_NOTIFICATIONS = {
   contributions: true,
@@ -86,7 +87,7 @@ export default function Profile() {
 
   const handleSaveEmail = async (e) => {
     e.preventDefault();
-    if (!newEmail.trim() || !newEmail.includes('@')) {
+    if (!isValidEmail(newEmail)) {
       setEmailError('Please enter a valid email address');
       return;
     }
@@ -218,7 +219,7 @@ export default function Profile() {
               placeholder="your@email.com"
             />
           </div>
-          <button type="submit" className="btn-primary" disabled={emailSaving || !newEmail.trim() || newEmail === user.email}>
+          <button type="submit" className="btn-primary" disabled={emailSaving || !isValidEmail(newEmail) || newEmail.trim() === user.email}>
             {emailSaving ? 'Updating…' : 'Update email address'}
           </button>
         </form>

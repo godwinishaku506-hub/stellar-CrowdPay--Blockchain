@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { isValidEmail } from '../lib/validators';
 
 export default function Login() {
   const { t } = useTranslation();
@@ -24,7 +25,7 @@ export default function Login() {
       setError(t('login.required'));
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    if (!isValidEmail(form.email)) {
       setError(t('login.invalidEmail'));
       return;
     }
