@@ -7,6 +7,7 @@ import RelativeTime from './RelativeTime';
 const PAGE_SIZE = 10;
 
 function KindBadge({ kind }) {
+  const { t } = useTranslation();
   const isContribution = kind === 'contribution';
   return (
     <span
@@ -21,7 +22,7 @@ function KindBadge({ kind }) {
         textTransform: 'capitalize',
       }}
     >
-      {isContribution ? 'Contribution' : 'Withdrawal'}
+      {isContribution ? t('transactionHistory.contribution') : t('transactionHistory.withdrawal')}
     </span>
   );
 }
@@ -64,6 +65,7 @@ function StatusPill({ status }) {
 }
 
 export default function TransactionHistory({ campaignId, isCreator }) {
+  const { t } = useTranslation();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -81,19 +83,16 @@ export default function TransactionHistory({ campaignId, isCreator }) {
         setHasMore(rows.length > limit);
         setRecords(rows.slice(0, limit));
       })
-      .catch((err) => setError(err.message || 'Could not load transaction history.'))
+      .catch((err) => setError(err.message || t('transactionHistory.loadError')))
       .finally(() => setLoading(false));
-  }, [campaignId, isCreator, limit]);
+  }, [campaignId, isCreator, limit, t]);
 
   if (!isCreator) return null;
 
   return (
-    <section style={styles.section} aria-label="Transaction history">
-      <h2 style={styles.h2}>Transaction history</h2>
-      <p style={styles.intro}>
-        Every on-chain event for this campaign — contributions, withdrawals, and failures — recorded
-        directly from the Stellar network.
-      </p>
+    <section style={styles.section} aria-label={t('transactionHistory.title')}>
+      <h2 style={styles.h2}>{t('transactionHistory.title')}</h2>
+      <p style={styles.intro}>{t('transactionHistory.intro')}</p>
 
       {error && (
         <p className="alert alert--error" role="alert">
@@ -102,10 +101,12 @@ export default function TransactionHistory({ campaignId, isCreator }) {
       )}
 
       {loading && records.length === 0 ? (
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Loading…</p>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+          {t('transactionHistory.loading')}
+        </p>
       ) : !loading && records.length === 0 ? (
         <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-          No on-chain transactions recorded yet.
+          {t('transactionHistory.empty')}
         </p>
       ) : (
         <>
@@ -133,14 +134,14 @@ export default function TransactionHistory({ campaignId, isCreator }) {
                       rel="noopener noreferrer"
                       style={styles.link}
                     >
-                      View on Stellar Expert ↗
+                      {t('transactionHistory.viewExplorer')}
                     </a>
                   </div>
                 )}
 
                 {tx.status === 'failed' && tx.failure_reason && (
                   <div className="alert alert--error" style={styles.failureReason} role="alert">
-                    <strong>Failure reason:</strong> {tx.failure_reason}
+                    <strong>{t('transactionHistory.failureReason')}</strong> {tx.failure_reason}
                   </div>
                 )}
               </li>
@@ -156,7 +157,7 @@ export default function TransactionHistory({ campaignId, isCreator }) {
                 disabled={loading}
                 style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem' }}
               >
-                {loading ? 'Loading…' : 'Load more'}
+                {loading ? t('transactionHistory.loading') : t('transactionHistory.loadMore')}
               </button>
             </div>
           )}

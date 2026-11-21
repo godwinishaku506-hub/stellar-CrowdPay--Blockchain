@@ -1,13 +1,21 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function VerificationBadge({ status, compact = false }) {
+  const { t } = useTranslation();
   if (status === 'verified') {
     return (
-      <span style={compact ? styles.verifiedCompact : styles.verified}>✓ Verified Creator</span>
+      <span style={compact ? styles.verifiedCompact : styles.verified}>
+        {t('verificationBadge.verified')}
+      </span>
     );
   }
 
-  return <span style={compact ? styles.warningCompact : styles.warning}>Unverified creator</span>;
+  return (
+    <span style={compact ? styles.warningCompact : styles.warning}>
+      {t('verificationBadge.unverified')}
+    </span>
+  );
 }
 
 const base = {

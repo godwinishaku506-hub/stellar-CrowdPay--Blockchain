@@ -459,9 +459,6 @@ export default function ContributeModal({
     if (anchorPopupRef.current && !anchorPopupRef.current.closed) {
       anchorPopupRef.current.close();
     }
-    if (phase === 'success') {
-      onSuccess?.();
-    }
     onClose();
   }
 

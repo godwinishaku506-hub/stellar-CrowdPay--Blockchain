@@ -343,13 +343,13 @@
     "freighterNetworkMismatch": "Freighter is connected to {{current}}. Switch it to {{expected}} and try again.",
     "viewOnStellarExpert": "View on Stellar Expert",
     "viewTransactionOnStellarExpert": "View transaction on Stellar Expert",
-    "submittingWithWallet": "Submitting with CrowdPay wallet\u2026",
-    "connectingFreighter": "Connecting to Freighter\u2026",
-    "preparingTx": "Preparing transaction\u2026",
-    "checkingFreighterNetwork": "Checking Freighter network\u2026",
-    "waitingForSignature": "Waiting for signature\u2026",
-    "submittingSigned": "Submitting signed transaction\u2026",
-    "preparingDeposit": "Preparing deposit flow\u2026",
+    "submittingWithWallet": "Submitting with CrowdPay wallet…",
+    "connectingFreighter": "Connecting to Freighter…",
+    "preparingTx": "Preparing transaction…",
+    "checkingFreighterNetwork": "Checking Freighter network…",
+    "waitingForSignature": "Waiting for signature…",
+    "submittingSigned": "Submitting signed transaction…",
+    "preparingDeposit": "Preparing deposit flow…",
     "xlmLabel": "XLM",
     "xlmHint": "Native Stellar",
     "usdcLabel": "USDC",
@@ -357,7 +357,7 @@
     "shareText": "I just backed {{title}} on CrowdPay! Join me: {{url}}",
     "installFreighter": "Install Freighter",
     "freighterNotDetectedLink": "Freighter extension not detected.",
-    "anchorDepositAsset": "Deposit asset: {{asset}} \u00b7 {{environment}}",
+    "anchorDepositAsset": "Deposit asset: {{asset}} · {{environment}}",
     "amountCreditedHelp": "This is the credited amount toward the campaign goal, in {{asset}}.",
     "perUserContributed": "(You have contributed {{existing}} {{asset}}; {{remaining}} remaining)",
     "aboveMaximumPerUser": "You have already contributed {{existing}} {{asset}}. The per-contributor limit is {{limit}} {{asset}}.",
@@ -372,7 +372,7 @@
     "anchorDepositInfo2": "Anchor deposit.",
     "plannedContributionDetail": "up to {{maxSend}} {{sendAsset}} will be used so the campaign receives {{campaignAmount}} {{campaignAsset}}.",
     "conversionSummaryDetail": "up to {{maxSend}} {{sendAsset}} authorized for {{campaignAmount}} {{campaignAsset}} received.",
-    "feeDetail": "{{pct}}% = {{fee}} {{asset}} \u2014 campaign receives {{net}} {{asset}}"
+    "feeDetail": "{{pct}}% = {{fee}} {{asset}} — campaign receives {{net}} {{asset}}"
   },
   "status": {
     "goalReached": "Goal reached",
@@ -413,6 +413,7 @@
     "submitted": "Submitted",
     "failed": "Failed",
     "pendingSignatures": "Pending signatures"
+  },
   "categories": {
     "technology": "Technology",
     "community": "Community",
@@ -426,5 +427,21 @@
     "label": "Category",
     "optional": "(optional)",
     "selectPlaceholder": "Select a category"
+  },
+  "transactionHistory": {
+    "title": "Transaction history",
+    "intro": "Every on-chain event for this campaign — contributions, withdrawals, and failures — recorded directly from the Stellar network.",
+    "contribution": "Contribution",
+    "withdrawal": "Withdrawal",
+    "loadError": "Could not load transaction history.",
+    "loading": "Loading…",
+    "empty": "No on-chain transactions recorded yet.",
+    "viewExplorer": "View on Stellar Expert ↗",
+    "failureReason": "Failure reason:",
+    "loadMore": "Load more"
+  },
+  "verificationBadge": {
+    "verified": "✓ Verified Creator",
+    "unverified": "Unverified creator"
   }
 }

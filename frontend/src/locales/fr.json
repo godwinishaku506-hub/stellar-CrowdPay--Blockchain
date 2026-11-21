@@ -343,13 +343,13 @@
     "freighterNetworkMismatch": "Freighter est connecté à {{current}}. Passez sur {{expected}} et réessayez.",
     "viewOnStellarExpert": "Voir sur Stellar Expert",
     "viewTransactionOnStellarExpert": "Voir la transaction sur Stellar Expert",
-    "submittingWithWallet": "Envoi avec le portefeuille CrowdPay\u2026",
-    "connectingFreighter": "Connexion à Freighter\u2026",
-    "preparingTx": "Préparation de la transaction\u2026",
-    "checkingFreighterNetwork": "Vérification du réseau Freighter\u2026",
-    "waitingForSignature": "En attente de la signature\u2026",
-    "submittingSigned": "Envoi de la transaction signée\u2026",
-    "preparingDeposit": "Préparation du flux de dépôt\u2026",
+    "submittingWithWallet": "Envoi avec le portefeuille CrowdPay…",
+    "connectingFreighter": "Connexion à Freighter…",
+    "preparingTx": "Préparation de la transaction…",
+    "checkingFreighterNetwork": "Vérification du réseau Freighter…",
+    "waitingForSignature": "En attente de la signature…",
+    "submittingSigned": "Envoi de la transaction signée…",
+    "preparingDeposit": "Préparation du flux de dépôt…",
     "xlmLabel": "XLM",
     "xlmHint": "Stellar natif",
     "usdcLabel": "USDC",
@@ -413,6 +413,7 @@
     "submitted": "Envoyé",
     "failed": "Échoué",
     "pendingSignatures": "Signatures en attente"
+  },
   "categories": {
     "technology": "Technologie",
     "community": "Communauté",
@@ -426,5 +427,21 @@
     "label": "Catégorie",
     "optional": "(facultatif)",
     "selectPlaceholder": "Sélectionner une catégorie"
+  },
+  "transactionHistory": {
+    "title": "Historique des transactions",
+    "intro": "Chaque événement on-chain de cette campagne — contributions, retraits et échecs — enregistré directement depuis le réseau Stellar.",
+    "contribution": "Contribution",
+    "withdrawal": "Retrait",
+    "loadError": "Impossible de charger l'historique des transactions.",
+    "loading": "Chargement…",
+    "empty": "Aucune transaction on-chain enregistrée pour l'instant.",
+    "viewExplorer": "Voir sur Stellar Expert ↗",
+    "failureReason": "Raison de l'échec :",
+    "loadMore": "Charger plus"
+  },
+  "verificationBadge": {
+    "verified": "✓ Créateur vérifié",
+    "unverified": "Créateur non vérifié"
   }
 }
