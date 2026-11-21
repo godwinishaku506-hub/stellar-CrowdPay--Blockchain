@@ -849,22 +849,26 @@ function MilestonesQueue() {
   );
 }
 
+const AUDIT_PAGE_SIZE = 50;
+
 function AuditLogQueue() {
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadAudit();
-  }, []);
+    loadAudit(offset);
+  }, [offset]);
 
-  function loadAudit() {
+  function loadAudit(pageOffset = offset) {
     setLoading(true);
     api
-      .getAdminAuditLog({ limit: 50, offset: 0 })
+      .getAdminAuditLog({ limit: AUDIT_PAGE_SIZE, offset: pageOffset })
       .then((data) => {
-        setLogs(data.actions || []);
-        setTotal(data.pagination?.total || (data.actions ? data.actions.length : 0));
+        const actions = data.actions || [];
+        setLogs(actions);
+        setTotal(data.pagination?.total ?? pageOffset + actions.length);
       })
       .catch(() => {
         setLogs([]);
@@ -873,6 +877,12 @@ function AuditLogQueue() {
       .finally(() => setLoading(false));
   }
 
+  const rangeStart = logs.length ? offset + 1 : 0;
+  const rangeEnd = offset + logs.length;
+  const hasPrev = offset > 0;
+  const hasNext = offset + AUDIT_PAGE_SIZE < total;
+  const smallBtn = { fontSize: '0.8rem', padding: '0.3rem 0.6rem', minHeight: 'auto' };
+
   return (
     <div style={{ marginBottom: '2.5rem' }}>
       <div
@@ -880,19 +890,35 @@ function AuditLogQueue() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
           marginBottom: '1rem',
         }}
       >
         <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-          Showing recent {logs.length} of {total} events
+          Showing {rangeStart}–{rangeEnd} of {total} events
         </span>
-        <button
-          onClick={loadAudit}
-          className="btn-secondary"
-          style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', minHeight: 'auto' }}
-        >
-          Refresh log
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            onClick={() => setOffset(Math.max(0, offset - AUDIT_PAGE_SIZE))}
+            disabled={!hasPrev || loading}
+            className="btn-secondary"
+            style={smallBtn}
+          >
+            Previous
+          </button>
+          <button
+            onClick={() => setOffset(offset + AUDIT_PAGE_SIZE)}
+            disabled={!hasNext || loading}
+            className="btn-secondary"
+            style={smallBtn}
+          >
+            Next
+          </button>
+          <button onClick={() => loadAudit()} className="btn-secondary" style={smallBtn}>
+            Refresh log
+          </button>
+        </div>
       </div>
 
       {loading ? (

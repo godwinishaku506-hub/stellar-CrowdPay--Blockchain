@@ -70,7 +70,10 @@ export default function CreateCampaign() {
 
   useEffect(() => {
     if (!user) return;
-    api.getMe().then(updateUser).catch(() => {});
+    api
+      .getMe()
+      .then(updateUser)
+      .catch(() => {});
   }, [user?.id, updateUser]);
 
   function setField(field) {
@@ -463,6 +466,21 @@ export default function CreateCampaign() {
                     placeholder="e.g. 500"
                   />
                 </div>
+                <div className="form-stack">
+                  <label className="label-strong" htmlFor="cc-max-per-user">
+                    Per-contributor cap ({form.asset_type})
+                  </label>
+                  <input
+                    id="cc-max-per-user"
+                    type="number"
+                    inputMode="decimal"
+                    min="0.0000001"
+                    step="any"
+                    value={form.max_per_user}
+                    onChange={setField('max_per_user')}
+                    placeholder="No cap"
+                  />
+                </div>
               </div>
             </div>
 
@@ -688,57 +706,6 @@ export default function CreateCampaign() {
               {t('createCampaign.showAmountsHelp')}
             </p>
 
-            <details style={{ marginTop: '1rem' }}>
-              <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
-                Contribution limits (optional)
-              </summary>
-              <div
-                style={{
-                  marginTop: '0.75rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.75rem',
-                }}
-              >
-                <div className="form-stack">
-                  <label htmlFor="cc-min">Minimum per contribution ({form.asset_type})</label>
-                  <input
-                    id="cc-min"
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={form.min_contribution}
-                    onChange={setField('min_contribution')}
-                    placeholder="No minimum"
-                  />
-                </div>
-                <div className="form-stack">
-                  <label htmlFor="cc-max">Maximum per contribution ({form.asset_type})</label>
-                  <input
-                    id="cc-max"
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={form.max_contribution}
-                    onChange={setField('max_contribution')}
-                    placeholder="No maximum"
-                  />
-                </div>
-                <div className="form-stack">
-                  <label htmlFor="cc-maxuser">Per-contributor cap ({form.asset_type})</label>
-                  <input
-                    id="cc-maxuser"
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={form.max_per_user}
-                    onChange={setField('max_per_user')}
-                    placeholder="No cap"
-                  />
-                </div>
-              </div>
-            </details>
-
             {error && (
               <p className="alert alert--error" style={{ marginTop: '1rem' }} role="alert">
                 {error}
@@ -842,18 +809,22 @@ export default function CreateCampaign() {
                       </button>
                     </div>
                     <div className="form-stack">
-                      <label className="label-strong">{t('createCampaign.milestoneTitle')}</label>
+                      <label className="label-strong" htmlFor={`cc-milestone-${index}-title`}>
+                        {t('createCampaign.milestoneTitle')}
+                      </label>
                       <input
+                        id={`cc-milestone-${index}-title`}
                         value={milestone.title}
                         onChange={(e) => setMilestoneField(index, 'title', e.target.value)}
                         placeholder="e.g. Deliver prototype"
                       />
                     </div>
                     <div className="form-stack" style={{ marginTop: '0.75rem' }}>
-                      <label className="label-strong">
+                      <label className="label-strong" htmlFor={`cc-milestone-${index}-description`}>
                         {t('createCampaign.milestoneDescription')}
                       </label>
                       <textarea
+                        id={`cc-milestone-${index}-description`}
                         value={milestone.description}
                         onChange={(e) => setMilestoneField(index, 'description', e.target.value)}
                         rows={3}
@@ -861,8 +832,11 @@ export default function CreateCampaign() {
                       />
                     </div>
                     <div className="form-stack" style={{ marginTop: '0.75rem' }}>
-                      <label className="label-strong">{t('createCampaign.milestoneRelease')}</label>
+                      <label className="label-strong" htmlFor={`cc-milestone-${index}-release`}>
+                        {t('createCampaign.milestoneRelease')}
+                      </label>
                       <input
+                        id={`cc-milestone-${index}-release`}
                         type="number"
                         inputMode="decimal"
                         min="0.01"
