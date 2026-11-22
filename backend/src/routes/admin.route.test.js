@@ -213,6 +213,38 @@ test('PATCH /demote: super-admin can demote another admin when quorum is maintai
     },
   });
 
+  test('PATCH /ban revokes all active API keys for the banned user', async () => {
+    let apiKeysRevoked = false;
+    const app = buildAdminApp({
+      isAdmin: true,
+      queryImpl: async (text, params) => {
+        if (text.includes('SELECT id, email, is_banned FROM users')) {
+          return { rows: [{ id: 'user-1', email: 'user@example.com', is_banned: false }] };
+        }
+        if (text.includes('UPDATE users SET is_banned = true')) {
+          return { rows: [{ id: 'user-1', email: 'user@example.com', is_banned: true }] };
+        }
+        if (text.includes('UPDATE api_keys SET revoked_at = NOW()')) {
+          apiKeysRevoked = params[0] === 'user-1';
+          return { rows: [{ id: 'key-1' }] };
+        }
+        if (text.includes('INSERT INTO admin_actions')) {
+          return { rows: [] };
+        }
+        return { rows: [] };
+      },
+    });
+
+    const res = await request(app)
+      .patch('/api/admin/users/user-1/ban')
+      .set('Authorization', 'Bearer token')
+      .send({ reason: 'Policy violation' });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.user.is_banned, true);
+    assert.equal(apiKeysRevoked, true);
+  });
+
   const res = await request(app)
     .patch('/api/admin/users/admin-2/demote')
     .set('Authorization', 'Bearer token');

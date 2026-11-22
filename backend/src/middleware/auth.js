@@ -29,12 +29,22 @@ async function authenticate(req) {
   if (token.startsWith('cp_live_')) {
     const keyHash = hashApiKey(token);
     const { rows } = await db.query(
-      `SELECT id, user_id, scopes FROM api_keys WHERE key_hash = $1 AND revoked_at IS NULL`,
+      `SELECT ak.id, ak.user_id, ak.scopes,
+              u.role, u.is_admin, u.is_super_admin, u.is_banned, u.token_version
+       FROM api_keys ak
+       JOIN users u ON u.id = ak.user_id
+       WHERE ak.key_hash = $1 AND ak.revoked_at IS NULL`,
       [keyHash]
     );
     if (!rows.length) throw new Error('Invalid API key');
     await db.query(`UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`, [rows[0].id]);
-    req.user = { userId: rows[0].user_id };
+    req.user = {
+      userId: rows[0].user_id,
+      role: rows[0].role,
+      is_admin: rows[0].is_admin,
+      is_super_admin: rows[0].is_super_admin,
+      is_banned: rows[0].is_banned,
+    };
     req.auth = { kind: 'api_key', apiKeyId: rows[0].id, scopes: rows[0].scopes || [] };
     return;
   }
@@ -43,7 +53,7 @@ async function authenticate(req) {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload;
     req.auth = { kind: 'jwt', scopes: null };
-    
+
     // Load admin status and validate token_version from database
     if (req.user.userId) {
       const { rows } = await db.query(

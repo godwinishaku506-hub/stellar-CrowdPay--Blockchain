@@ -125,11 +125,11 @@ router.get('/campaigns', async (req, res) => {
     }
 
     const { rows } = await db.query(
-      `SELECT c.id, c.title, c.status, c.raised_amount, c.target_amount, 
+      `SELECT c.id, c.title, c.status, c.raised_amount, c.target_amount,
               c.asset_type, c.created_at, c.deleted_at,
               u.id as creator_id, u.name as creator_name, u.email as creator_email,
               (SELECT COUNT(*) FROM contributions WHERE campaign_id = c.id) as contribution_count
-       FROM campaigns c 
+       FROM campaigns c
        JOIN users u ON c.creator_id = u.id
        ${where}
        ORDER BY c.created_at DESC`,
@@ -149,11 +149,11 @@ router.get('/campaigns', async (req, res) => {
 router.get('/campaigns/deleted', async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT c.id, c.title, c.status, c.raised_amount, c.target_amount, 
+      `SELECT c.id, c.title, c.status, c.raised_amount, c.target_amount,
               c.asset_type, c.created_at, c.deleted_at,
               u.id as creator_id, u.name as creator_name, u.email as creator_email,
               (SELECT COUNT(*) FROM contributions WHERE campaign_id = c.id) as contribution_count
-       FROM campaigns c 
+       FROM campaigns c
        JOIN users u ON c.creator_id = u.id
        WHERE c.deleted_at IS NOT NULL
        ORDER BY c.deleted_at DESC`
@@ -190,9 +190,9 @@ router.patch('/campaigns/:id/suspend', adminJsonParser, async (req, res) => {
       ['suspended', id]
     );
 
-    await logAdminAction(req.user.userId, 'suspend', 'campaign', id, { 
+    await logAdminAction(req.user.userId, 'suspend', 'campaign', id, {
       reason: reason || null,
-      previous_status: campaign.status 
+      previous_status: campaign.status
     }, req);
 
     logger.info('Campaign suspended', { campaignId: id, adminId: req.user.userId, reason });
@@ -231,7 +231,7 @@ router.patch('/campaigns/:id/restore', adminJsonParser, async (req, res) => {
         [id]
       );
 
-      await logAdminAction(req.user.userId, 'restore', 'campaign', id, { 
+      await logAdminAction(req.user.userId, 'restore', 'campaign', id, {
         restored_from: 'deleted'
       }, req);
 
@@ -251,8 +251,8 @@ router.patch('/campaigns/:id/restore', adminJsonParser, async (req, res) => {
       ['active', id]
     );
 
-    await logAdminAction(req.user.userId, 'restore', 'campaign', id, { 
-      previous_status: campaign.status 
+    await logAdminAction(req.user.userId, 'restore', 'campaign', id, {
+      previous_status: campaign.status
     }, req);
 
     logger.info('Campaign restored', { campaignId: id, adminId: req.user.userId });
@@ -288,7 +288,7 @@ router.delete('/campaigns/:id', adminJsonParser, async (req, res) => {
       [id]
     );
 
-    await logAdminAction(req.user.userId, 'delete', 'campaign', id, { 
+    await logAdminAction(req.user.userId, 'delete', 'campaign', id, {
       reason: reason || null
     }, req);
 
@@ -321,8 +321,8 @@ router.patch('/campaigns/:id/feature', adminJsonParser, async (req, res) => {
     }
 
     const { rows: updated } = await db.query(
-      `UPDATE campaigns 
-       SET featured = true, featured_at = NOW(), featured_note = $1 
+      `UPDATE campaigns
+       SET featured = true, featured_at = NOW(), featured_note = $1
        WHERE id = $2 RETURNING id, title, featured, featured_at, featured_note`,
       [note || null, id]
     );
@@ -358,8 +358,8 @@ router.patch('/campaigns/:id/unfeature', adminJsonParser, async (req, res) => {
     }
 
     const { rows: updated } = await db.query(
-      `UPDATE campaigns 
-       SET featured = false, featured_at = NULL, featured_note = NULL 
+      `UPDATE campaigns
+       SET featured = false, featured_at = NULL, featured_note = NULL
        WHERE id = $1 RETURNING id, title, featured`,
       [id]
     );
@@ -440,7 +440,13 @@ router.patch('/users/:id/ban', adminJsonParser, async (req, res) => {
       [id]
     );
 
-    await logAdminAction(req.user.userId, 'ban', 'user', id, { 
+    await db.query(
+      `UPDATE api_keys SET revoked_at = NOW()
+       WHERE user_id = $1 AND revoked_at IS NULL`,
+      [id]
+    );
+
+    await logAdminAction(req.user.userId, 'ban', 'user', id, {
       reason: reason
     }, req);
 
@@ -506,7 +512,7 @@ router.get('/audit-log', async (req, res) => {
 
     // Keyset pagination: pass the last row's id as before_id to fetch the next page.
     const { rows } = await db.query(
-      `SELECT a.id, a.admin_user_id, u.email as admin_email, a.action_type, 
+      `SELECT a.id, a.admin_user_id, u.email as admin_email, a.action_type,
               a.target_type, a.target_id, a.details, a.actor_ip, a.user_agent,
               a.request_id, a.created_at
        FROM admin_actions a

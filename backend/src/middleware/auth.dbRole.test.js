@@ -158,3 +158,87 @@ test('DB role is returned in response — token role is not used', async () => {
   // Must return 'creator' (DB value), NOT 'contributor' (token value)
   assert.equal(res.body.role, 'creator');
 });
+
+test('banned user is rejected when authenticating with an API key', async () => {
+  process.env.API_KEY_PEPPER = 'test-api-key-pepper';
+  process.env.JWT_SECRET = JWT_SECRET;
+
+  const { requireAuth } = proxyquire('./auth', {
+    '../config/database': {
+      query: async (text) => {
+        if (text.includes('FROM api_keys ak') && text.includes('JOIN users u')) {
+          return {
+            rows: [{
+              id: 'key-1',
+              user_id: 'user-banned-api',
+              scopes: ['read', 'write'],
+              role: 'contributor',
+              is_admin: false,
+              is_super_admin: false,
+              is_banned: true,
+            }],
+          };
+        }
+        return { rows: [] };
+      },
+    },
+    '@sentry/node': {
+      setUser: () => {},
+    },
+  });
+
+  const app = express();
+  app.use(express.json());
+  app.get('/protected', requireAuth, (req, res) => res.json({ userId: req.user.userId }));
+
+  const res = await request(app)
+    .get('/protected')
+    .set('Authorization', 'Bearer cp_live_test-key');
+
+  assert.equal(res.status, 403);
+  assert.match(res.body.error, /suspended/i);
+});
+
+test('non-banned API key carries DB status fields', async () => {
+  process.env.API_KEY_PEPPER = 'test-api-key-pepper';
+
+  const { requireAuth } = proxyquire('./auth', {
+    '../config/database': {
+      query: async (text) => {
+        if (text.includes('FROM api_keys ak') && text.includes('JOIN users u')) {
+          return {
+            rows: [{
+              id: 'key-2',
+              user_id: 'user-api',
+              scopes: ['read'],
+              role: 'creator',
+              is_admin: false,
+              is_super_admin: false,
+              is_banned: false,
+            }],
+          };
+        }
+        return { rows: [] };
+      },
+    },
+    '@sentry/node': {
+      setUser: () => {},
+    },
+  });
+
+  const app = express();
+  app.use(express.json());
+  app.get('/protected', requireAuth, (req, res) => res.json({
+    userId: req.user.userId,
+    role: req.user.role,
+    is_banned: req.user.is_banned,
+  }));
+
+  const res = await request(app)
+    .get('/protected')
+    .set('Authorization', 'Bearer cp_live_test-key');
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.role, 'creator');
+  assert.equal(res.body.is_banned, false);
+});
