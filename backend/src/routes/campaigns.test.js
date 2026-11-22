@@ -20,6 +20,7 @@ function buildApp({
   queueFailedCampaignRefundsImpl,
   authUser,
   campaignStatusImpl,
+  cacheImpl,
 }) {
   const router = proxyquire('./campaigns', {
     '../services/campaignStatusService': campaignStatusImpl || {
@@ -41,6 +42,16 @@ function buildApp({
       getSupportedAssetCodes: () => ['XLM', 'USDC'],
       buildWithdrawalTransaction: buildWithdrawalTransactionImpl,
     },
+    '../services/sorobanService': {
+      provisionCampaignContracts: async () => null,
+      isValidContractId: () => true,
+      isSorobanEnabled: () => false,
+    },
+    '../middleware/validation': {
+      createCampaignValidation: [],
+      getCampaignsValidation: [],
+      validateRequest: (_req, _res, next) => next(),
+    },
     '../services/ledgerMonitor': {
       watchCampaignWallet: async () => {},
     },
@@ -59,6 +70,10 @@ function buildApp({
         req.user = authUser || undefined;
         next();
       },
+    },
+    '../utils/cache': cacheImpl || {
+      invalidate: () => {},
+      invalidatePrefix: () => {},
     },
   });
 
@@ -619,4 +634,81 @@ test('POST /campaigns/:id/members/accept returns 404 for invalid token', async (
     .send({ token: 'nosuchtoken' });
 
   assert.equal(response.status, 404);
+});
+
+test('PATCH /api/campaigns/:id invalidates detail and list caches', async () => {
+  const invalidatedKeys = [];
+  const invalidatedPrefixes = [];
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    cacheImpl: {
+      invalidate: (key) => invalidatedKeys.push(key),
+      invalidatePrefix: (prefix) => invalidatedPrefixes.push(prefix),
+    },
+    queryImpl: async (text) => {
+      if (text === 'SELECT * FROM campaigns WHERE id = $1') {
+        return { rows: [{ id: 'camp-1', creator_id: 'creator-1', status: 'active' }] };
+      }
+      if (text.includes('SELECT status FROM campaigns')) {
+        return { rows: [{ status: 'active' }] };
+      }
+      if (text.includes('UPDATE campaigns')) {
+        return { rows: [{ id: 'camp-1', creator_id: 'creator-1', title: 'Updated title', status: 'active' }] };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .patch('/api/campaigns/camp-1')
+    .send({ title: 'Updated title' });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.title, 'Updated title');
+  assert.deepEqual(invalidatedKeys, ['campaigns:id:camp-1']);
+  assert.deepEqual(invalidatedPrefixes, ['campaigns:list:']);
+});
+
+test('POST /api/campaigns/:id/members rejects malformed invitation email with 422', async () => {
+  let inviteInsertAttempted = false;
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'admin' },
+    queryImpl: async (text) => {
+      if (text.includes('SELECT creator_id FROM campaigns')) {
+        return { rows: [{ creator_id: 'creator-1' }] };
+      }
+      if (text.includes('INSERT INTO campaign_members')) inviteInsertAttempted = true;
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns/camp-1/members')
+    .send({ email: 'not-an-email', role: 'viewer' });
+
+  assert.equal(response.status, 422);
+  assert.equal(response.body.fields.email, 'Invalid email format');
+  assert.equal(inviteInsertAttempted, false);
+});
+
+test('POST /api/campaigns/:id/members rejects oversized invitation email with 422', async () => {
+  let inviteInsertAttempted = false;
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'admin' },
+    queryImpl: async (text) => {
+      if (text.includes('SELECT creator_id FROM campaigns')) {
+        return { rows: [{ creator_id: 'creator-1' }] };
+      }
+      if (text.includes('INSERT INTO campaign_members')) inviteInsertAttempted = true;
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns/camp-1/members')
+    .send({ email: `${'a'.repeat(250)}@example.com`, role: 'viewer' });
+
+  assert.equal(response.status, 422);
+  assert.equal(response.body.fields.email, 'Email must be at most 254 characters');
+  assert.equal(inviteInsertAttempted, false);
 });

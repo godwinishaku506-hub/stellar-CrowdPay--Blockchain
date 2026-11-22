@@ -1,4 +1,5 @@
 const express = require('express');
+const { body, validationResult } = require('express-validator');
 const router = require('express').Router();
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
@@ -28,6 +29,7 @@ const {
   validateRequest,
 } = require('../middleware/validation');
 const asyncHandler = require('../utils/asyncHandler');
+const cache = require('../utils/cache');
 
 const crypto = require('crypto');
 
@@ -462,22 +464,34 @@ router.get('/:id', asyncHandler(async (req, res) => {
    *       404:
    *         description: Not found
    */
+  // #347 — cache the public (unauthenticated) campaign detail so repeated
+  // reads don't hit the database; PATCH invalidates this key on edit.
+  const campaignId = req.params.id;
+  const isAuthenticated = !!(
+    req.headers.authorization && req.headers.authorization.startsWith('Bearer ')
+  );
+  const cacheKey = `campaigns:id:${campaignId}`;
+  if (!isAuthenticated) {
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+  }
+
   const query = `
     SELECT *,
            (SELECT COUNT(DISTINCT sender_public_key)::int FROM contributions WHERE campaign_id = $1) AS contributor_count
     FROM campaigns
     WHERE id = $1
   `;
-  const { rows } = await db.query(query, [req.params.id]);
+  const { rows } = await db.query(query, [campaignId]);
   if (!rows.length) return res.status(404).json({ error: 'Campaign not found' });
-  
+
   const campaign = rows[0];
-  
+
   // Allow viewing suspended campaigns with a notice, but deleted campaigns are not accessible
   if (campaign.deleted_at) {
     return res.status(404).json({ error: 'Campaign not found' });
   }
-  
+
   let userRole = null;
 
   const header = req.headers.authorization;
@@ -512,6 +526,11 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const response = { ...campaign, user_role: userRole };
   if (campaign.status === 'suspended') {
     response.suspended_notice = 'This campaign has been suspended and cannot receive new contributions';
+  }
+
+  // Cache the public view (no per-user role) for unauthenticated visitors.
+  if (!isAuthenticated) {
+    cache.set(cacheKey, response, 15_000); // 15 s TTL
   }
 
   res.json(response);
@@ -730,7 +749,7 @@ router.post('/cron/reminders', requireAuth, requireRole('admin'), asyncHandler(a
     sendEmailSafe({
       to: campaign.creator_email,
       subject: `Reminder: Campaign "${campaign.title}" ends in 48 hours`,
-      text: `Your campaign "${campaign.title}" is approaching its deadline on ${new Date(campaign.deadline).toDateString()}. 
+      text: `Your campaign "${campaign.title}" is approaching its deadline on ${new Date(campaign.deadline).toDateString()}.
 If your target is reached, you can request a withdrawal. Otherwise, contributions will be refunded.`
     });
   }
@@ -1045,6 +1064,8 @@ router.patch('/:id', campaignBodyParser, requireAuth, asyncHandler(async (req, r
     return res.status(404).json({ error: 'Campaign not found' });
   }
 
+  cache.invalidate(`campaigns:id:${campaignId}`);
+  cache.invalidatePrefix('campaigns:list:');
   res.json(updatedRows[0]);
 }));
 
@@ -1091,7 +1112,31 @@ router.post(
 );
 
 // POST /campaigns/:id/members — owner invites a user by email
-router.post('/:id/members', requireAuth, requireCampaignMember('owner'), asyncHandler(async (req, res) => {
+const inviteMemberValidation = [
+  body('email')
+    .trim()
+    .toLowerCase()
+    .custom((value) => {
+      if (value.length > 254) throw new Error('Email must be at most 254 characters');
+      return true;
+    })
+    .isEmail()
+    .withMessage('Invalid email format'),
+];
+
+router.post('/:id/members', requireAuth, requireCampaignMember('owner'), inviteMemberValidation, asyncHandler(async (req, res) => {
+  const validationErrors = validationResult(req);
+  if (!validationErrors.isEmpty()) {
+    const fields = {};
+    for (const error of validationErrors.array()) {
+      if (!fields[error.path]) fields[error.path] = error.msg;
+    }
+    return res.status(422).json({
+      error: 'Validation failed',
+      fields,
+    });
+  }
+
   const { email, role } = req.body;
   if (!email || !role) return res.status(422).json({ error: 'Email and role are required' });
   if (!['owner', 'manager', 'viewer'].includes(role)) {
