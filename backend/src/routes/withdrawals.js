@@ -97,8 +97,6 @@ async function logWithdrawalEvent(client, {
 }
 
 async function checkOwnerAccess(req, campaignId) {
-  if (req.user.role === 'admin') return true;
-
   const { rows: campaignRows } = await db.query('SELECT creator_id FROM campaigns WHERE id = $1', [campaignId]);
   if (campaignRows.length && campaignRows[0].creator_id === req.user.userId) {
     return true;
@@ -120,10 +118,11 @@ async function assertWithdrawalAccess(req, campaignId) {
   if (!rows.length) return { error: 'Campaign not found', status: 404 };
   
   const isOwner = await checkOwnerAccess(req, campaignId);
-  if (!isOwner) {
+  const isPlatformApprover = canPerformPlatformSignature(req.user.userId);
+  if (!isOwner && !isPlatformApprover) {
     return { error: 'Not authorized to view or manage withdrawals for this campaign', status: 403 };
   }
-  return { creatorId: rows[0].creator_id, isCreator: true, isAdmin: req.user.role === 'admin' };
+  return { creatorId: rows[0].creator_id, isCreator: isOwner, isPlatformApprover, isAdmin: req.user.role === 'admin' };
 }
 
 router.get('/capabilities', requireAuth, (req, res) => {

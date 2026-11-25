@@ -689,3 +689,169 @@ test('approve: concurrent approval that loses the claim returns 409 without subm
   assert.equal(res.status, 409);
   assert.equal(submitCalls, 0);
 });
+
+// ---------------------------------------------------------------------------
+// GET /api/withdrawals/campaign/:campaignId, /:id, /:id/events authorization
+// ---------------------------------------------------------------------------
+
+function buildReadQueryImpl() {
+  return async (text, params) => {
+    if (text.includes('FROM campaigns WHERE id')) {
+      if (params && params[0] === 'missing-campaign') return { rows: [] };
+      return { rows: [campaignRow({ id: '11111111-1111-1111-1111-111111111111', creator_id: 'creator-1' })] };
+    }
+    if (text.includes('FROM campaign_members WHERE campaign_id')) {
+      return { rows: [] };
+    }
+    if (text.includes('FROM withdrawal_requests WHERE campaign_id')) {
+      return {
+        rows: [
+          {
+            id: 'w-1',
+            campaign_id: '11111111-1111-1111-1111-111111111111',
+            requested_by: 'creator-1',
+            amount: '10.0000000',
+            destination_key: VALID_DESTINATION,
+            creator_signed: true,
+            platform_signed: false,
+            status: 'pending',
+            denial_reason: null,
+            tx_hash: null,
+            created_at: new Date(),
+          },
+        ],
+      };
+    }
+    if (text.includes('FROM withdrawal_requests WHERE id')) {
+      if (params && params[0] === 'missing-withdrawal') return { rows: [] };
+      return {
+        rows: [
+          {
+            id: 'w-1',
+            campaign_id: '11111111-1111-1111-1111-111111111111',
+            requested_by: 'creator-1',
+            amount: '10.0000000',
+            destination_key: VALID_DESTINATION,
+            creator_signed: true,
+            platform_signed: false,
+            status: 'pending',
+          },
+        ],
+      };
+    }
+    if (text.includes('FROM withdrawal_requests wr WHERE wr.id')) {
+      if (params && params[0] === 'missing-withdrawal') return { rows: [] };
+      return { rows: [{ campaign_id: '11111111-1111-1111-1111-111111111111' }] };
+    }
+    if (text.includes('FROM withdrawal_approval_events e WHERE e.withdrawal_request_id')) {
+      return {
+        rows: [
+          {
+            id: 1,
+            withdrawal_request_id: 'w-1',
+            actor_user_id: 'creator-1',
+            action: 'created',
+            note: 'Initial request',
+            metadata: null,
+            actor_ip: '127.0.0.1',
+            user_agent: 'test',
+            request_id: 'req-1',
+            created_at: new Date(),
+          },
+        ],
+      };
+    }
+    return { rows: [] };
+  };
+}
+
+test('GET /api/withdrawals/campaign/:campaignId authorizes creator', async () => {
+  const { app, cleanup } = buildApp({
+    userId: 'creator-1',
+    role: 'creator',
+    platformApproverUserId: 'platform-user',
+    queryImpl: buildReadQueryImpl(),
+  });
+  const res = await request(app).get('/api/withdrawals/campaign/11111111-1111-1111-1111-111111111111');
+  cleanup();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 1);
+  assert.equal(res.body[0].id, 'w-1');
+});
+
+test('GET /api/withdrawals/campaign/:campaignId authorizes platform approver', async () => {
+  const { app, cleanup } = buildApp({
+    userId: 'platform-user',
+    role: 'admin',
+    platformApproverUserId: 'platform-user',
+    queryImpl: buildReadQueryImpl(),
+  });
+  const res = await request(app).get('/api/withdrawals/campaign/11111111-1111-1111-1111-111111111111');
+  cleanup();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 1);
+});
+
+test('GET /api/withdrawals/campaign/:campaignId denies unrelated admin without platform approver role', async () => {
+  const { app, cleanup } = buildApp({
+    userId: 'unrelated-admin',
+    role: 'admin',
+    platformApproverUserId: 'platform-user',
+    queryImpl: buildReadQueryImpl(),
+  });
+  const res = await request(app).get('/api/withdrawals/campaign/11111111-1111-1111-1111-111111111111');
+  cleanup();
+  assert.equal(res.status, 403);
+});
+
+test('GET /api/withdrawals/campaign/:campaignId denies unrelated user', async () => {
+  const { app, cleanup } = buildApp({
+    userId: 'other-user',
+    role: 'user',
+    platformApproverUserId: 'platform-user',
+    queryImpl: buildReadQueryImpl(),
+  });
+  const res = await request(app).get('/api/withdrawals/campaign/11111111-1111-1111-1111-111111111111');
+  cleanup();
+  assert.equal(res.status, 403);
+});
+
+test('GET /api/withdrawals/:id authorizes creator and platform approver, denies unrelated admin', async () => {
+  const queryImpl = buildReadQueryImpl();
+
+  const creator = buildApp({ userId: 'creator-1', role: 'creator', platformApproverUserId: 'platform-user', queryImpl });
+  const resCreator = await request(creator.app).get('/api/withdrawals/w-1');
+  creator.cleanup();
+  assert.equal(resCreator.status, 200);
+  assert.equal(resCreator.body.id, 'w-1');
+
+  const approver = buildApp({ userId: 'platform-user', role: 'admin', platformApproverUserId: 'platform-user', queryImpl });
+  const resApprover = await request(approver.app).get('/api/withdrawals/w-1');
+  approver.cleanup();
+  assert.equal(resApprover.status, 200);
+
+  const admin = buildApp({ userId: 'unrelated-admin', role: 'admin', platformApproverUserId: 'platform-user', queryImpl });
+  const resAdmin = await request(admin.app).get('/api/withdrawals/w-1');
+  admin.cleanup();
+  assert.equal(resAdmin.status, 403);
+});
+
+test('GET /api/withdrawals/:id/events authorizes creator and platform approver, denies unrelated admin', async () => {
+  const queryImpl = buildReadQueryImpl();
+
+  const creator = buildApp({ userId: 'creator-1', role: 'creator', platformApproverUserId: 'platform-user', queryImpl });
+  const resCreator = await request(creator.app).get('/api/withdrawals/w-1/events');
+  creator.cleanup();
+  assert.equal(resCreator.status, 200);
+  assert.equal(resCreator.body.length, 1);
+
+  const approver = buildApp({ userId: 'platform-user', role: 'admin', platformApproverUserId: 'platform-user', queryImpl });
+  const resApprover = await request(approver.app).get('/api/withdrawals/w-1/events');
+  approver.cleanup();
+  assert.equal(resApprover.status, 200);
+
+  const admin = buildApp({ userId: 'unrelated-admin', role: 'admin', platformApproverUserId: 'platform-user', queryImpl });
+  const resAdmin = await request(admin.app).get('/api/withdrawals/w-1/events');
+  admin.cleanup();
+  assert.equal(resAdmin.status, 403);
+});

@@ -228,7 +228,7 @@ Deprecated aliases still respond but will be removed; new integrations must use 
 | `DELETE` | `/api/webhooks/:id` | User | |
 | `GET` | `/api/webhooks/deliveries` | User | |
 | `POST` | `/api/webhooks/kyc` | Signed | KYC provider callback |
-| `POST` | `/api/webhooks/email-events` | Token | Email provider bounce/complaint events; suppresses the address |
+| `POST` | `/api/webhooks/email-events` | Token | Email provider bounce/complaint events; suppresses the address. Requires `X-Email-Webhook-Token` header. |
 
 ### Notifications
 
@@ -284,6 +284,12 @@ Response includes `redirect_url` or `session_token`, plus the updated user. Pers
 ### `POST /api/webhooks/kyc`
 
 KYC provider callback. Updates the matched user to `verified` or `rejected` from provider status. The campaign creation gate is controlled by `KYC_REQUIRED_FOR_CAMPAIGNS` and defaults to enabled; set it to `false` for testnet/dev.
+
+### `POST /api/webhooks/email-events`
+
+Email provider bounce and complaint events (SendGrid, Mailgun). Suppresses the recipient email address from future non-essential delivery attempts.
+
+**Authentication:** Requires the shared secret passed exclusively via the `X-Email-Webhook-Token` request header (matching `EMAIL_WEBHOOK_SECRET`). Query parameter tokens are rejected to prevent secret leakage in logs.
 
 ### `POST /api/campaigns`
 

@@ -361,3 +361,76 @@ test('GET /api/webhooks/deliveries returns an array (empty when none)', async ()
   assert.equal(res.status, 200);
   assert.ok(Array.isArray(res.body));
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/webhooks/email-events — email bounce/complaint suppression
+// ---------------------------------------------------------------------------
+
+test('POST /api/webhooks/email-events accepts valid X-Email-Webhook-Token header', async () => {
+  const prevSecret = process.env.EMAIL_WEBHOOK_SECRET;
+  process.env.EMAIL_WEBHOOK_SECRET = 'valid-token-secret-123';
+  try {
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/webhooks/email-events')
+      .set('X-Email-Webhook-Token', 'valid-token-secret-123')
+      .send([{ email: 'bounced@example.com', event: 'bounce' }]);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.received, true);
+    assert.equal(res.body.suppressed, 1);
+  } finally {
+    if (prevSecret === undefined) delete process.env.EMAIL_WEBHOOK_SECRET;
+    else process.env.EMAIL_WEBHOOK_SECRET = prevSecret;
+  }
+});
+
+test('POST /api/webhooks/email-events rejects token provided in query string', async () => {
+  const prevSecret = process.env.EMAIL_WEBHOOK_SECRET;
+  process.env.EMAIL_WEBHOOK_SECRET = 'valid-token-secret-123';
+  try {
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/webhooks/email-events?token=valid-token-secret-123')
+      .send([{ email: 'bounced@example.com', event: 'bounce' }]);
+
+    assert.equal(res.status, 401);
+  } finally {
+    if (prevSecret === undefined) delete process.env.EMAIL_WEBHOOK_SECRET;
+    else process.env.EMAIL_WEBHOOK_SECRET = prevSecret;
+  }
+});
+
+test('POST /api/webhooks/email-events rejects invalid token in header', async () => {
+  const prevSecret = process.env.EMAIL_WEBHOOK_SECRET;
+  process.env.EMAIL_WEBHOOK_SECRET = 'valid-token-secret-123';
+  try {
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/webhooks/email-events')
+      .set('X-Email-Webhook-Token', 'invalid-secret')
+      .send([{ email: 'bounced@example.com', event: 'bounce' }]);
+
+    assert.equal(res.status, 401);
+  } finally {
+    if (prevSecret === undefined) delete process.env.EMAIL_WEBHOOK_SECRET;
+    else process.env.EMAIL_WEBHOOK_SECRET = prevSecret;
+  }
+});
+
+test('POST /api/webhooks/email-events rejects when EMAIL_WEBHOOK_SECRET is unset', async () => {
+  const prevSecret = process.env.EMAIL_WEBHOOK_SECRET;
+  delete process.env.EMAIL_WEBHOOK_SECRET;
+  try {
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/webhooks/email-events')
+      .set('X-Email-Webhook-Token', 'any-secret')
+      .send([{ email: 'bounced@example.com', event: 'bounce' }]);
+
+    assert.equal(res.status, 401);
+  } finally {
+    if (prevSecret === undefined) delete process.env.EMAIL_WEBHOOK_SECRET;
+    else process.env.EMAIL_WEBHOOK_SECRET = prevSecret;
+  }
+});

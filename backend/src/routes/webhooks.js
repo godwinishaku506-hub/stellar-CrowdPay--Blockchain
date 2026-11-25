@@ -134,7 +134,7 @@ const SUPPRESSING_EMAIL_EVENTS = new Set(['bounce', 'dropped', 'spamreport', 'co
 function verifyEmailWebhookToken(req) {
   const secret = process.env.EMAIL_WEBHOOK_SECRET;
   if (!secret) return false;
-  const received = String(req.headers['x-email-webhook-token'] || req.query.token || '');
+  const received = String(req.headers['x-email-webhook-token'] || '');
   const a = Buffer.from(received);
   const b = Buffer.from(secret);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
